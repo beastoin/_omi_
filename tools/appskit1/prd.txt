@@ -1,0 +1,30 @@
+# Product Requirements Document
+
+## Overview
+Create a web server in Golang with HTMX integration to handle POST requests for real-time transcript processors as specified in the Omi.me documentation.
+
+## Requirements
+1. The server should accept POST requests at the endpoint `/transcript/process`.
+2. The request body should follow the format specified in the Omi.me documentation for real-time transcript processors.
+3. The server should validate the incoming request data.
+4. The server should process the transcript data and return an appropriate response.
+5. The server should use HTMX for dynamic content updates without full page reloads.
+6. The server should handle errors gracefully and return appropriate error messages.
+
+## API Specification
+Based on the Omi.me documentation, the server should handle POST requests with the following structure:
+
+```json
+[
+  {
+    "text": "string",
+    "speaker": "SPEAKER_XX",
+    "speakerId": number,
+    "is_user": boolean,
+    "start": number,
+    "end": number
+  }
+]
+```
+
+The response should acknowledge receipt of the transcript data.

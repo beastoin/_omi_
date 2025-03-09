@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omi Real-Time Processor</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>Omi Real-Time</h1>
+
+        <div class="result-container">
+            <h2>Real-Time Transcript Stream <span id="transcript-status" class="status-indicator">Connecting...</span>
+            </h2>
+            <div id="realtime-transcript">
+                <p>Waiting for real-time transcript data...</p>
+            </div>
+        </div>
+
+        <div class="result-container">
+            <h2>Real-Time Audio Waveform</h2>
+            <div class="audio-controls">
+                <span id="audio-status">Disconnected</span>
+            </div>
+            <div id="audio-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Sample Rate:</span>
+                    <span class="stat-value" id="sample-rate">-</span> Hz
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Channels:</span>
+                    <span class="stat-value" id="channels">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Peak:</span>
+                    <span class="stat-value" id="peak-value">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">RMS:</span>
+                    <span class="stat-value" id="rms-value">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Bytes:</span>
+                    <span class="stat-value" id="byte-count">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">User ID:</span>
+                    <span class="stat-value" id="uid-value">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Last Update:</span>
+                    <span class="stat-value" id="timestamp">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Buffer Size:</span>
+                    <span class="stat-value" id="buffer-size">-</span> bytes
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Buffer Duration:</span>
+                    <span class="stat-value" id="buffer-duration">-</span> sec
+                </div>
+            </div>
+            <div id="waveform-container">
+                <canvas id="waveform" width="800" height="200"></canvas>
+                <div id="timeline-container">
+                    <canvas id="timeline" width="800" height="20"></canvas>
+                </div>
+            </div>
+            <div id="volume-meter-container">
+                <div id="volume-meter">
+                    <div id="volume-level"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="result-container">
+            <h2>Stored Audio Visualization</h2>
+            <div class="audio-controls">
+                <button id="load-stored-audio" class="audio-button">Load Stored Audio</button>
+                <button id="auto-load-toggle" class="audio-button auto-load-button">Auto Load: OFF</button>
+                <button id="play-stored-audio" class="audio-button playback-button" disabled>Play Audio</button>
+                <input type="range" id="stored-volume-control" min="0" max="100" value="50" class="volume-slider"
+                    disabled>
+                <span id="stored-volume-label">50%</span>
+                <button id="download-audio" class="audio-button download-button">Download Audio</button>
+                <select id="audio-format" class="audio-format-select">
+                    <option value="pcm">PCM Raw</option>
+                    <option value="wav" selected>WAV</option>
+                </select>
+            </div>
+            <div id="stored-waveform-container">
+                <canvas id="stored-waveform" width="800" height="200"></canvas>
+                <div id="stored-selection-overlay">
+                    <div id="stored-selection-start-handle" class="selection-handle"></div>
+                    <div id="stored-selection-region"></div>
+                    <div id="stored-selection-end-handle" class="selection-handle"></div>
+                </div>
+                <div id="stored-timeline-container">
+                    <canvas id="stored-timeline" width="800" height="20"></canvas>
+                </div>
+                <div id="stored-selection-controls">
+                    <span id="stored-selection-time">No selection</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // Get UID from URL query parameter - required
+        const urlParams = new URLSearchParams(window.location.search);
+        const uid = urlParams.get('uid');
+        
+        // Redirect if no UID is provided
+        if (!uid) {
+            const randomUID = 'user_' + Math.random().toString(36).substring(2, 10);
+            window.location.href = window.location.pathname + '?uid=' + randomUID;
+        }
+        
+        // WebSocket connection for real-time updates
+        const connectWebSocket = () => {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws?uid=${uid}`;
+            const socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                console.log('WebSocket connection established');
+                document.getElementById('transcript-status').textContent = 'Connected';
+                document.getElementById('transcript-status').classList.add('connected');
+            };
+
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    // Check if data is an array (segments)
+                    if (Array.isArray(data)) {
+                        updateRealtimeTranscript(data);
+                    } else {
+                        console.log('Received non-segment data:', data);
+                    }
+                } catch (error) {
+                    console.error('Error parsing WebSocket message:', error);
+                    console.log('Raw message data:', event.data);
+                }
+            };
+
+            socket.onclose = () => {
+                console.log('WebSocket connection closed. Reconnecting...');
+                document.getElementById('transcript-status').textContent = 'Disconnected - Reconnecting...';
+                document.getElementById('transcript-status').classList.remove('connected');
+                document.getElementById('transcript-status').classList.add('reconnecting');
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('transcript-status').textContent = 'Error - Reconnecting...';
+                document.getElementById('transcript-status').classList.remove('connected');
+                document.getElementById('transcript-status').classList.add('error');
+                socket.close();
+            };
+        };
+
+        // Function to update the real-time transcript display
+        const updateRealtimeTranscript = (segments) => {
+            const container = document.getElementById('realtime-transcript');
+
+            // Clear "waiting" message if it exists
+            if (container.querySelector('p')?.textContent.includes('Waiting for')) {
+                container.innerHTML = '';
+            }
+
+            // Validate segments is an array
+            if (!Array.isArray(segments)) {
+                console.error('Expected segments to be an array, got:', typeof segments, segments);
+                return;
+            }
+
+            // Create elements for each segment
+            segments.forEach(segment => {
+                console.log('Processing segment:', segment);
+
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = `segment ${segment.is_user ? 'user-segment' : 'speaker-segment'}`;
+
+                const speakerDiv = document.createElement('div');
+                speakerDiv.className = 'segment-speaker';
+                speakerDiv.textContent = `${segment.speaker} (ID: ${segment.speaker_id})`;
+
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'segment-time';
+                timeDiv.textContent = `${segment.start.toFixed(2)} - ${segment.end.toFixed(2)}`;
+
+                const textDiv = document.createElement('div');
+                textDiv.className = 'segment-text';
+                textDiv.textContent = segment.text;
+
+                segmentDiv.appendChild(speakerDiv);
+                segmentDiv.appendChild(timeDiv);
+                segmentDiv.appendChild(textDiv);
+
+                container.appendChild(segmentDiv);
+            });
+
+            // Scroll to the bottom to show the latest segments
+            container.scrollTop = container.scrollHeight;
+        };
+
+        // Connect to WebSocket when the page loads
+        window.addEventListener('load', () => {
+            connectWebSocket();
+            connectAudioWebSocket(); // Auto-connect to audio WebSocket too
+        });
+
+        // Audio Waveform Visualization
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let audioSocket = null;
+        let isAudioConnected = false;
+        let audioSampleRate = 8000;
+        let audioChannels = 1;
+        let audioBuffer = [];
+        const MAX_BUFFER_SIZE = 8192;
+
+        // Audio playback variables
+        let isPlaying = false;
+        let audioSource = null;
+        let audioGain = null;
+        let playbackBuffer = [];
+        const PLAYBACK_BUFFER_SIZE = 16384; // Larger buffer for smoother playback
+
+
+        // Canvas setup
+        const canvas = document.getElementById('waveform');
+        const canvasCtx = canvas.getContext('2d');
+
+        // Timeline setup
+        const timelineCanvas = document.getElementById('timeline');
+        const timelineCtx = timelineCanvas.getContext('2d');
+
+
+        // Initialize canvas
+        function initCanvas() {
+            canvasCtx.fillStyle = 'rgb(20, 20, 20)';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Initialize timeline
+            timelineCtx.fillStyle = 'rgb(20, 20, 20)';
+            timelineCtx.fillRect(0, 0, timelineCanvas.width, timelineCanvas.height);
+
+            // Draw initial timeline
+            drawTimeline();
+        }
+
+        // Draw waveform
+        function drawWaveform(audioData) {
+            // Clear canvas
+            canvasCtx.fillStyle = 'rgb(20, 20, 20)';
+            canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid lines
+            drawGrid();
+
+            // Draw center line
+            canvasCtx.lineWidth = 1;
+            canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(0, canvas.height / 2);
+            canvasCtx.lineTo(canvas.width, canvas.height / 2);
+            canvasCtx.stroke();
+
+            // Draw waveform
+            const sliceWidth = canvas.width / audioData.length;
+            let x = 0;
+
+            // Draw filled waveform
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(0, canvas.height / 2);
+
+            for (let i = 0; i < audioData.length; i++) {
+                // Convert PCM value to normalized value between -1 and 1
+                const pcmValue = audioData[i];
+                // Scale to canvas height
+                const y = (pcmValue / 32768) * canvas.height / 2 + canvas.height / 2;
+
+                canvasCtx.lineTo(x, y);
+                x += sliceWidth;
+            }
+
+            canvasCtx.lineTo(canvas.width, canvas.height / 2);
+            canvasCtx.closePath();
+
+            // Create gradient
+            const gradient = canvasCtx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, 'rgba(0, 255, 128, 0.8)');
+            gradient.addColorStop(0.5, 'rgba(0, 255, 0, 0.2)');
+            gradient.addColorStop(1, 'rgba(0, 255, 128, 0.8)');
+
+            canvasCtx.fillStyle = gradient;
+            canvasCtx.fill();
+
+            // Draw outline
+            canvasCtx.lineWidth = 2;
+            canvasCtx.strokeStyle = 'rgb(0, 255, 0)';
+
+            x = 0;
+            canvasCtx.beginPath();
+
+            for (let i = 0; i < audioData.length; i++) {
+                const pcmValue = audioData[i];
+                const y = (pcmValue / 32768) * canvas.height / 2 + canvas.height / 2;
+
+                if (i === 0) {
+                    canvasCtx.moveTo(x, y);
+                } else {
+                    canvasCtx.lineTo(x, y);
+                }
+
+                x += sliceWidth;
+            }
+
+            canvasCtx.stroke();
+        }
+
+        // Process audio data
+        function processAudioData(data) {
+            // Convert binary data to Int16Array (PCM format)
+            const pcmData = new Int16Array(data);
+
+            // Add to buffer for visualization
+            audioBuffer = [...audioBuffer, ...Array.from(pcmData)];
+
+            // Keep buffer size limited
+            if (audioBuffer.length > MAX_BUFFER_SIZE) {
+                audioBuffer = audioBuffer.slice(audioBuffer.length - MAX_BUFFER_SIZE);
+            }
+
+            // Add to playback buffer
+            playbackBuffer = [...playbackBuffer, ...Array.from(pcmData)];
+
+            // Keep playback buffer size limited
+            if (playbackBuffer.length > PLAYBACK_BUFFER_SIZE) {
+                playbackBuffer = playbackBuffer.slice(playbackBuffer.length - PLAYBACK_BUFFER_SIZE);
+            }
+
+            // Draw waveform
+            drawWaveform(audioBuffer);
+
+            // Update timeline
+            drawTimeline();
+
+            // If playing, feed new data to the audio context
+            if (isPlaying) {
+                feedAudioData(pcmData);
+            }
+        }
+
+        // Convert Int16 PCM data to AudioBuffer and play it
+        function feedAudioData(pcmData) {
+            // Create a buffer source
+            const audioBuffer = audioContext.createBuffer(audioChannels, pcmData.length, audioSampleRate);
+
+            // Fill the buffer with PCM data
+            const channelData = audioBuffer.getChannelData(0);
+            for (let i = 0; i < pcmData.length; i++) {
+                // Convert Int16 to Float32 (-1.0 to 1.0)
+                channelData[i] = pcmData[i] / 32768.0;
+            }
+
+            // Create a new source and connect it to the gain node
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioGain);
+
+            // Start playback immediately
+            source.start();
+        }
+
+        // Connect to audio WebSocket with auto-reconnect
+        let audioReconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        const RECONNECT_DELAY_MS = 2000; // Start with 2 seconds
+        let audioReconnectTimer = null;
+
+        function connectAudioWebSocket() {
+            if (isAudioConnected) {
+                return;
+            }
+
+            // Clear any existing reconnect timer
+            if (audioReconnectTimer) {
+                clearTimeout(audioReconnectTimer);
+                audioReconnectTimer = null;
+            }
+
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/audio?sample_rate=${audioSampleRate}&channels=${audioChannels}&uid=${uid}`;
+
+            document.getElementById('audio-status').textContent = 'Connecting...';
+            document.getElementById('audio-status').classList.remove('connected', 'error');
+            document.getElementById('audio-status').classList.add('reconnecting');
+
+            audioSocket = new WebSocket(wsUrl);
+
+            audioSocket.onopen = () => {
+                console.log('Audio WebSocket connection established');
+                isAudioConnected = true;
+                audioReconnectAttempts = 0; // Reset reconnect attempts on successful connection
+
+                document.getElementById('audio-status').textContent = 'Connected';
+                document.getElementById('audio-status').classList.add('connected');
+                document.getElementById('audio-status').classList.remove('reconnecting', 'error');
+            };
+
+            audioSocket.onmessage = (event) => {
+                if (event.data instanceof Blob) {
+                    // Handle binary audio data
+                    event.data.arrayBuffer().then(buffer => {
+                        processAudioData(buffer);
+                    });
+                } else {
+                    // Handle metadata or stats message
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Received audio metadata/stats:', data);
+
+                        // Update audio parameters if present
+                        if (data.sample_rate) {
+                            audioSampleRate = data.sample_rate;
+                            document.getElementById('sample-rate').textContent = audioSampleRate;
+                        }
+
+                        if (data.channels) {
+                            audioChannels = data.channels;
+                            document.getElementById('channels').textContent = audioChannels;
+                        }
+
+                        // Update stats if present
+                        if (data.peak_value !== undefined) {
+                            document.getElementById('peak-value').textContent = data.peak_value;
+                            // Update volume meter
+                            updateVolumeMeter(data.peak_value / 32768); // Normalize to 0-1
+                        }
+
+                        if (data.rms_value !== undefined) {
+                            document.getElementById('rms-value').textContent = data.rms_value.toFixed(2);
+                        }
+
+                        if (data.byte_count !== undefined) {
+                            document.getElementById('byte-count').textContent = data.byte_count;
+                        }
+
+                        if (data.uid) {
+                            document.getElementById('uid-value').textContent = data.uid;
+                        }
+
+                        if (data.timestamp) {
+                            const date = new Date(data.timestamp);
+                            document.getElementById('timestamp').textContent = date.toLocaleTimeString();
+                        }
+
+                        if (data.total_buffer_size !== undefined) {
+                            document.getElementById('buffer-size').textContent = data.total_buffer_size;
+                        }
+                        
+                        if (data.buffer_duration !== undefined) {
+                            document.getElementById('buffer-duration').textContent = data.buffer_duration.toFixed(2);
+                        }
+
+                    } catch (error) {
+                        console.error('Error parsing WebSocket message:', error);
+                        console.log('Raw message data:', event.data);
+                    }
+                }
+            };
+
+            audioSocket.onclose = (event) => {
+                console.log('Audio WebSocket connection closed', event.code, event.reason);
+                isAudioConnected = false;
+
+                // Don't attempt to reconnect if manually disconnected
+                if (event.code === 1000) {
+                    document.getElementById('audio-status').textContent = 'Disconnected';
+                    document.getElementById('audio-status').classList.remove('connected', 'error', 'reconnecting');
+
+                    // Stop playback if active
+                    stopAudioPlayback();
+                    return;
+                }
+
+                // Auto-reconnect logic
+                if (audioReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    audioReconnectAttempts++;
+                    const delay = Math.min(RECONNECT_DELAY_MS * audioReconnectAttempts, 30000); // Max 30 seconds
+
+                    document.getElementById('audio-status').textContent = `Reconnecting (${audioReconnectAttempts})...`;
+                    document.getElementById('audio-status').classList.remove('connected', 'error');
+                    document.getElementById('audio-status').classList.add('reconnecting');
+
+                    console.log(`Attempting to reconnect in ${delay / 1000} seconds (attempt ${audioReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+
+                    audioReconnectTimer = setTimeout(() => {
+                        if (!isAudioConnected) {
+                            connectAudioWebSocket();
+                        }
+                    }, delay);
+                } else {
+                    document.getElementById('audio-status').textContent = 'Reconnect failed';
+                    document.getElementById('audio-status').classList.remove('connected', 'reconnecting');
+                    document.getElementById('audio-status').classList.add('error');
+                    document.getElementById('toggle-audio').textContent = 'Connect Audio';
+
+                    // Disable playback controls
+                    document.getElementById('toggle-playback').disabled = true;
+                    document.getElementById('volume-control').disabled = true;
+
+                    // Stop playback if active
+                    stopAudioPlayback();
+                }
+            };
+
+            audioSocket.onerror = (error) => {
+                console.error('Audio WebSocket error:', error);
+                isAudioConnected = false;
+                document.getElementById('audio-status').textContent = 'Error';
+                document.getElementById('audio-status').classList.add('error');
+                document.getElementById('audio-status').classList.remove('connected', 'reconnecting');
+            };
+        }
+
+        // Disconnect from audio WebSocket
+        function disconnectAudioWebSocket() {
+            // Clear any reconnect timers
+            if (audioReconnectTimer) {
+                clearTimeout(audioReconnectTimer);
+                audioReconnectTimer = null;
+            }
+
+            // Reset reconnect attempts
+            audioReconnectAttempts = 0;
+
+            if (audioSocket) {
+                // Use code 1000 to indicate normal closure (won't trigger auto-reconnect)
+                audioSocket.close(1000, "User disconnected");
+                audioSocket = null;
+                isAudioConnected = false;
+                document.getElementById('audio-status').textContent = 'Disconnected';
+                document.getElementById('audio-status').classList.remove('connected', 'error', 'reconnecting');
+
+                // Stop playback if active
+                stopAudioPlayback();
+
+                // Clear selection
+                clearSelection();
+            }
+        }
+
+        // Update connection status display
+        function updateConnectionStatus() {
+            const transcriptStatus = document.getElementById('transcript-status');
+            const audioStatus = document.getElementById('audio-status');
+
+            // Add status indicators to the page
+            transcriptStatus.classList.add('status-indicator');
+            audioStatus.classList.add('status-indicator');
+        }
+
+        // Update volume meter
+        function updateVolumeMeter(level) {
+            // Level should be between 0 and 1
+            level = Math.min(Math.max(level, 0), 1);
+
+            const volumeLevel = document.getElementById('volume-level');
+            const percentage = Math.round(level * 100);
+
+            volumeLevel.style.width = `${percentage}%`;
+
+            // Apply smooth animation
+            volumeLevel.style.transition = 'width 0.1s ease, background-color 0.2s ease';
+
+            // Change color based on level with gradient
+            let color;
+            if (level < 0.3) {
+                color = '#2ecc71'; // Green
+            } else if (level < 0.7) {
+                // Gradient from green to orange
+                const greenComponent = Math.round(236 - (level - 0.3) * (236 - 46) / 0.4);
+                const redComponent = Math.round(46 + (level - 0.3) * (243 - 46) / 0.4);
+                color = `rgb(${redComponent}, ${greenComponent}, 18)`;
+            } else {
+                color = '#e74c3c'; // Red
+
+                // Add pulsing effect for high levels
+                if (level > 0.9) {
+                    volumeLevel.style.animation = 'pulse 0.5s infinite alternate';
+                } else {
+                    volumeLevel.style.animation = 'none';
+                }
+            }
+
+            volumeLevel.style.backgroundColor = color;
+
+            // Update stats display with current level
+            document.getElementById('peak-value').textContent = Math.round(level * 32768);
+        }
+
+        // Add pulse animation to style
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                from { opacity: 0.8; }
+                to { opacity: 1; box-shadow: 0 0 10px #ff3030; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Download audio buffer
+        document.getElementById('download-audio').addEventListener('click', () => {
+            const format = document.getElementById('audio-format').value;
+            const url = `/audio/buffer?format=${format}&sample_rate=${audioSampleRate}&channels=${audioChannels}&uid=${uid}`;
+
+            // Create a temporary link and trigger download
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `audio_buffer.${format}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+
+        // Stored audio visualization
+        const storedCanvas = document.getElementById('stored-waveform');
+        const storedCanvasCtx = storedCanvas.getContext('2d');
+        const storedTimelineCanvas = document.getElementById('stored-timeline');
+        const storedTimelineCtx = storedTimelineCanvas.getContext('2d');
+
+        // Selection elements for stored audio
+        const storedSelectionOverlay = document.getElementById('stored-selection-overlay');
+        const storedSelectionRegion = document.getElementById('stored-selection-region');
+        const storedSelectionStartHandle = document.getElementById('stored-selection-start-handle');
+        const storedSelectionEndHandle = document.getElementById('stored-selection-end-handle');
+        const storedSelectionTimeDisplay = document.getElementById('stored-selection-time');
+
+        // Stored audio variables
+        let storedAudioBuffer = [];
+        let storedPlaybackBuffer = [];
+        let storedSelectionStart = null;
+        let storedSelectionEnd = null;
+        let isStoredSelecting = false;
+        let isStoredDraggingStart = false;
+        let isStoredDraggingEnd = false;
+        let storedSelectionStartX = 0;
+        let isStoredPlaying = false;
+        let storedAudioSource = null;
+        let storedAudioGain = null;
+
+        // Load stored audio
+        document.getElementById('load-stored-audio').addEventListener('click', () => {
+            // Clear any existing selection before loading new audio
+            clearStoredSelection();
+            fetchStoredAudio();
+        });
+
+        // Auto-load stored audio every 5 seconds
+        let autoLoadInterval = null;
+
+        function startAutoLoad() {
+            if (autoLoadInterval) {
+                clearInterval(autoLoadInterval);
+            }
+            autoLoadInterval = setInterval(() => {
+                console.log("Auto-loading stored audio...");
+                fetchStoredAudio();
+            }, 5000); // 5 seconds
+        }
+
+        function stopAutoLoad() {
+            if (autoLoadInterval) {
+                clearInterval(autoLoadInterval);
+                autoLoadInterval = null;
+            }
+        }
+
+        // Play stored audio
+        document.getElementById('play-stored-audio').addEventListener('click', () => {
+            if (isStoredPlaying) {
+                stopStoredAudioPlayback();
+            } else {
+                playStoredAudioPlayback();
+            }
+        });
+
+        // Volume control for stored audio
+        document.getElementById('stored-volume-control').addEventListener('input', (e) => {
+            const volumeValue = e.target.value;
+            document.getElementById('stored-volume-label').textContent = `${volumeValue}%`;
+
+            if (storedAudioGain) {
+                storedAudioGain.gain.value = volumeValue / 100;
+            }
+        });
+
+        // Fetch stored audio from server
+        function fetchStoredAudio() {
+            // Save current selection positions
+            const prevSelectionStart = storedSelectionStart;
+            const prevSelectionEnd = storedSelectionEnd;
+            const prevBufferLength = storedAudioBuffer.length;
+
+            fetch(`/audio/buffer?format=pcm&sample_rate=${audioSampleRate}&channels=${audioChannels}&uid=${uid}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    return response.arrayBuffer();
+                })
+                .then(buffer => {
+                    if (buffer.byteLength === 0) {
+                        console.log('No audio data available yet');
+                        return;
+                    }
+
+                    const pcmData = new Int16Array(buffer);
+                    storedAudioBuffer = Array.from(pcmData);
+                    storedPlaybackBuffer = Array.from(pcmData);
+
+                    // Reset selection state
+                    isStoredSelecting = false;
+                    isStoredDraggingStart = false;
+                    isStoredDraggingEnd = false;
+
+                    // Initialize stored audio canvas
+                    initStoredCanvas();
+
+                    // Draw waveform
+                    drawStoredWaveform(storedAudioBuffer);
+
+                    // Draw timeline
+                    drawStoredTimeline();
+
+                    // Enable playback controls
+                    document.getElementById('play-stored-audio').disabled = false;
+                    document.getElementById('stored-volume-control').disabled = false;
+
+                    // Try to restore selection if buffer size hasn't changed dramatically
+                    if (prevSelectionStart !== null && prevSelectionEnd !== null &&
+                        Math.abs(prevBufferLength - storedAudioBuffer.length) < 1000) {
+                        // Restore selection
+                        storedSelectionStart = prevSelectionStart;
+                        storedSelectionEnd = prevSelectionEnd;
+
+                        // Update selection display
+                        storedSelectionStartHandle.style.left = `${storedSelectionStart}px`;
+                        storedSelectionEndHandle.style.left = `${storedSelectionEnd}px`;
+                        storedSelectionStartHandle.style.display = 'block';
+                        storedSelectionEndHandle.style.display = 'block';
+
+                        storedSelectionRegion.style.left = `${storedSelectionStart}px`;
+                        storedSelectionRegion.style.width = `${storedSelectionEnd - storedSelectionStart}px`;
+                        storedSelectionRegion.style.display = 'block';
+
+                        updateStoredSelectionControls();
+                    } else {
+                        // Clear any existing selection
+                        clearStoredSelection();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching stored audio:', error);
+                    // Don't stop auto-loading on error, just log it
+                });
+        }
+
+        // Initialize stored audio canvas
+        function initStoredCanvas() {
+            storedCanvasCtx.fillStyle = 'rgb(20, 20, 20)';
+            storedCanvasCtx.fillRect(0, 0, storedCanvas.width, storedCanvas.height);
+
+            // Initialize timeline
+            storedTimelineCtx.fillStyle = 'rgb(20, 20, 20)';
+            storedTimelineCtx.fillRect(0, 0, storedTimelineCanvas.width, storedTimelineCanvas.height);
+
+            // Match selection overlay size to canvas
+            storedSelectionOverlay.style.width = `${storedCanvas.width}px`;
+            storedSelectionOverlay.style.height = `${storedCanvas.height}px`;
+
+            // Set up selection events
+            setupStoredSelectionEvents();
+        }
+
+        // Draw stored waveform
+        function drawStoredWaveform(audioData) {
+            // Clear canvas
+            storedCanvasCtx.fillStyle = 'rgb(20, 20, 20)';
+            storedCanvasCtx.fillRect(0, 0, storedCanvas.width, storedCanvas.height);
+
+            // Draw grid lines
+            drawStoredGrid();
+
+            // Draw center line
+            storedCanvasCtx.lineWidth = 1;
+            storedCanvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            storedCanvasCtx.beginPath();
+            storedCanvasCtx.moveTo(0, storedCanvas.height / 2);
+            storedCanvasCtx.lineTo(storedCanvas.width, storedCanvas.height / 2);
+            storedCanvasCtx.stroke();
+
+            // Draw waveform
+            const sliceWidth = storedCanvas.width / audioData.length;
+            let x = 0;
+
+            // Draw filled waveform
+            storedCanvasCtx.beginPath();
+            storedCanvasCtx.moveTo(0, storedCanvas.height / 2);
+
+            for (let i = 0; i < audioData.length; i += Math.max(1, Math.floor(audioData.length / 1000))) {
+                // Convert PCM value to normalized value between -1 and 1
+                const pcmValue = audioData[i];
+                // Scale to canvas height
+                const y = (pcmValue / 32768) * storedCanvas.height / 2 + storedCanvas.height / 2;
+
+                storedCanvasCtx.lineTo(x, y);
+                x += sliceWidth * Math.max(1, Math.floor(audioData.length / 1000));
+            }
+
+            storedCanvasCtx.lineTo(storedCanvas.width, storedCanvas.height / 2);
+            storedCanvasCtx.closePath();
+
+            // Create gradient
+            const gradient = storedCanvasCtx.createLinearGradient(0, 0, 0, storedCanvas.height);
+            gradient.addColorStop(0, 'rgba(0, 255, 128, 0.8)');
+            gradient.addColorStop(0.5, 'rgba(0, 255, 0, 0.2)');
+            gradient.addColorStop(1, 'rgba(0, 255, 128, 0.8)');
+
+            storedCanvasCtx.fillStyle = gradient;
+            storedCanvasCtx.fill();
+
+            // Draw outline
+            storedCanvasCtx.lineWidth = 2;
+            storedCanvasCtx.strokeStyle = 'rgb(0, 255, 0)';
+
+            x = 0;
+            storedCanvasCtx.beginPath();
+
+            for (let i = 0; i < audioData.length; i += Math.max(1, Math.floor(audioData.length / 1000))) {
+                const pcmValue = audioData[i];
+                const y = (pcmValue / 32768) * storedCanvas.height / 2 + storedCanvas.height / 2;
+
+                if (i === 0) {
+                    storedCanvasCtx.moveTo(x, y);
+                } else {
+                    storedCanvasCtx.lineTo(x, y);
+                }
+
+                x += sliceWidth * Math.max(1, Math.floor(audioData.length / 1000));
+            }
+
+            storedCanvasCtx.stroke();
+        }
+
+        // Draw grid on stored waveform
+        function drawStoredGrid() {
+            // Calculate total duration in seconds
+            const totalDuration = storedAudioBuffer.length / audioSampleRate;
+
+            // Determine appropriate time interval
+            let interval = 1; // Default 1 second
+            if (totalDuration > 20) interval = 5;
+            if (totalDuration > 60) interval = 10;
+            if (totalDuration > 300) interval = 30;
+            if (totalDuration < 5) interval = 0.5;
+
+            // Draw vertical time grid lines
+            storedCanvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            storedCanvasCtx.lineWidth = 1;
+
+            for (let time = 0; time <= totalDuration; time += interval) {
+                // Convert time to x position
+                const x = (time / totalDuration) * storedCanvas.width;
+
+                storedCanvasCtx.beginPath();
+                storedCanvasCtx.moveTo(x, 0);
+                storedCanvasCtx.lineTo(x, storedCanvas.height);
+                storedCanvasCtx.stroke();
+            }
+
+            // Draw horizontal amplitude grid lines
+            const amplitudeSteps = 4; // Number of lines above and below center
+
+            for (let i = 1; i <= amplitudeSteps; i++) {
+                const yOffset = (storedCanvas.height / 2) * (i / amplitudeSteps);
+
+                // Line above center
+                storedCanvasCtx.beginPath();
+                storedCanvasCtx.moveTo(0, storedCanvas.height / 2 - yOffset);
+                storedCanvasCtx.lineTo(storedCanvas.width, storedCanvas.height / 2 - yOffset);
+                storedCanvasCtx.stroke();
+
+                // Line below center
+                storedCanvasCtx.beginPath();
+                storedCanvasCtx.moveTo(0, storedCanvas.height / 2 + yOffset);
+                storedCanvasCtx.lineTo(storedCanvas.width, storedCanvas.height / 2 + yOffset);
+                storedCanvasCtx.stroke();
+            }
+        }
+
+        // Draw stored timeline
+        function drawStoredTimeline() {
+            // Clear timeline canvas
+            storedTimelineCtx.fillStyle = 'rgb(20, 20, 20)';
+            storedTimelineCtx.fillRect(0, 0, storedTimelineCanvas.width, storedTimelineCanvas.height);
+
+            // Calculate total duration in seconds
+            const totalDuration = storedAudioBuffer.length / audioSampleRate;
+
+            // Determine appropriate time interval
+            let interval = 1; // Default 1 second
+            if (totalDuration > 20) interval = 5;
+            if (totalDuration > 60) interval = 10;
+            if (totalDuration > 300) interval = 30;
+            if (totalDuration < 5) interval = 0.5;
+
+            // Draw time markers
+            storedTimelineCtx.font = '10px monospace';
+            storedTimelineCtx.fillStyle = '#95a5a6';
+            storedTimelineCtx.textAlign = 'center';
+
+            for (let time = 0; time <= totalDuration; time += interval) {
+                // Convert time to x position
+                const x = (time / totalDuration) * storedTimelineCanvas.width;
+
+                // Draw tick mark
+                storedTimelineCtx.fillStyle = '#95a5a6';
+                storedTimelineCtx.fillRect(x, 0, 1, 5);
+
+                // Draw time label
+                const minutes = Math.floor(time / 60);
+                const seconds = time % 60;
+                const timeLabel = `${minutes}:${seconds.toFixed(0).padStart(2, '0')}`;
+                storedTimelineCtx.fillText(timeLabel, x, 15);
+            }
+        }
+
+        // Initialize stored canvas
+        function initStoredCanvas() {
+            storedCanvasCtx.fillStyle = 'rgb(20, 20, 20)';
+            storedCanvasCtx.fillRect(0, 0, storedCanvas.width, storedCanvas.height);
+
+            // Initialize timeline
+            storedTimelineCtx.fillStyle = 'rgb(20, 20, 20)';
+            storedTimelineCtx.fillRect(0, 0, storedTimelineCanvas.width, storedTimelineCanvas.height);
+
+            // Match selection overlay size to canvas
+            storedSelectionOverlay.style.width = `${storedCanvas.width}px`;
+            storedSelectionOverlay.style.height = `${storedCanvas.height}px`;
+
+            // Set up selection events
+            setupStoredSelectionEvents();
+        }
+
+        // Event handler references for cleanup
+        let storedCanvasMouseDownHandler = null;
+        let storedDocumentMouseMoveHandler = null;
+        let storedDocumentMouseUpHandler = null;
+
+        // Setup selection events for stored audio
+        function setupStoredSelectionEvents() {
+            // Remove any existing event listeners first
+            if (storedCanvasMouseDownHandler) {
+                storedCanvas.removeEventListener('mousedown', storedCanvasMouseDownHandler);
+            }
+            if (storedDocumentMouseMoveHandler) {
+                document.removeEventListener('mousemove', storedDocumentMouseMoveHandler);
+            }
+            if (storedDocumentMouseUpHandler) {
+                document.removeEventListener('mouseup', storedDocumentMouseUpHandler);
+            }
+
+            // Canvas click to start selection
+            storedCanvasMouseDownHandler = (e) => {
+                const rect = storedCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+
+                // Check if clicking on handles
+                if (storedSelectionStart !== null && Math.abs(x - storedSelectionStart) < 10) {
+                    isStoredDraggingStart = true;
+                } else if (storedSelectionEnd !== null && Math.abs(x - storedSelectionEnd) < 10) {
+                    isStoredDraggingEnd = true;
+                } else {
+                    // Start new selection
+                    isStoredSelecting = true;
+                    storedSelectionStartX = x;
+                    storedSelectionStart = x;
+                    storedSelectionEnd = null;
+
+                    // Show start handle
+                    storedSelectionStartHandle.style.left = `${x}px`;
+                    storedSelectionStartHandle.style.display = 'block';
+                    storedSelectionRegion.style.display = 'none';
+                    storedSelectionEndHandle.style.display = 'none';
+
+                    updateStoredSelectionControls();
+                }
+            };
+            storedCanvas.addEventListener('mousedown', storedCanvasMouseDownHandler);
+
+            // Mouse move for dragging
+            storedDocumentMouseMoveHandler = (e) => {
+                if (!isStoredSelecting && !isStoredDraggingStart && !isStoredDraggingEnd) return;
+
+                const rect = storedCanvas.getBoundingClientRect();
+                const x = Math.max(0, Math.min(storedCanvas.width, e.clientX - rect.left));
+
+                if (isStoredDraggingStart) {
+                    // Drag start handle
+                    storedSelectionStart = Math.min(x, storedSelectionEnd);
+                    storedSelectionStartHandle.style.left = `${storedSelectionStart}px`;
+                    storedSelectionRegion.style.left = `${storedSelectionStart}px`;
+                    storedSelectionRegion.style.width = `${storedSelectionEnd - storedSelectionStart}px`;
+                } else if (isStoredDraggingEnd) {
+                    // Drag end handle
+                    storedSelectionEnd = Math.max(x, storedSelectionStart);
+                    storedSelectionEndHandle.style.left = `${storedSelectionEnd}px`;
+                    storedSelectionRegion.style.width = `${storedSelectionEnd - storedSelectionStart}px`;
+                } else if (isStoredSelecting) {
+                    // Creating new selection
+                    if (x > storedSelectionStartX) {
+                        storedSelectionStart = storedSelectionStartX;
+                        storedSelectionEnd = x;
+                    } else {
+                        storedSelectionStart = x;
+                        storedSelectionEnd = storedSelectionStartX;
+                    }
+
+                    // Update selection display
+                    storedSelectionStartHandle.style.left = `${storedSelectionStart}px`;
+                    storedSelectionEndHandle.style.left = `${storedSelectionEnd}px`;
+                    storedSelectionEndHandle.style.display = 'block';
+
+                    storedSelectionRegion.style.left = `${storedSelectionStart}px`;
+                    storedSelectionRegion.style.width = `${storedSelectionEnd - storedSelectionStart}px`;
+                    storedSelectionRegion.style.display = 'block';
+                }
+
+                updateStoredSelectionTime();
+            };
+            document.addEventListener('mousemove', storedDocumentMouseMoveHandler);
+
+            // Mouse up to end selection
+            storedDocumentMouseUpHandler = () => {
+                isStoredSelecting = false;
+                isStoredDraggingStart = false;
+                isStoredDraggingEnd = false;
+
+                if (storedSelectionStart !== null && storedSelectionEnd !== null) {
+                    updateStoredSelectionControls();
+                }
+            };
+            document.addEventListener('mouseup', storedDocumentMouseUpHandler);
+
+            // No selection-specific buttons needed anymore
+        }
+
+        // Update selection controls for stored audio
+        function updateStoredSelectionControls() {
+            const hasSelection = storedSelectionStart !== null && storedSelectionEnd !== null;
+
+            if (hasSelection) {
+                updateStoredSelectionTime();
+            } else {
+                storedSelectionTimeDisplay.textContent = 'No selection';
+            }
+        }
+
+        // Update selection time display for stored audio
+        function updateStoredSelectionTime() {
+            if (storedSelectionStart === null || storedSelectionEnd === null) return;
+
+            // Convert pixel positions to buffer indices
+            const startIdx = Math.floor((storedSelectionStart / storedCanvas.width) * storedAudioBuffer.length);
+            const endIdx = Math.floor((storedSelectionEnd / storedCanvas.width) * storedAudioBuffer.length);
+
+            // Convert to time in seconds
+            const startTime = startIdx / audioSampleRate;
+            const endTime = endIdx / audioSampleRate;
+            const duration = endTime - startTime;
+
+            // Format with more precision
+            const formatTime = (time) => {
+                const minutes = Math.floor(time / 60);
+                const seconds = time % 60;
+                return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
+            };
+
+            storedSelectionTimeDisplay.textContent = `${formatTime(startTime)} - ${formatTime(endTime)} (${duration.toFixed(2)}s)`;
+
+            // Update timeline to highlight selection
+            drawStoredTimeline();
+
+            // Draw selection markers on timeline
+            const startX = (startTime / (storedAudioBuffer.length / audioSampleRate)) * storedTimelineCanvas.width;
+            const endX = (endTime / (storedAudioBuffer.length / audioSampleRate)) * storedTimelineCanvas.width;
+
+            storedTimelineCtx.fillStyle = 'rgba(46, 204, 113, 0.5)';
+            storedTimelineCtx.fillRect(startX, 0, endX - startX, storedTimelineCanvas.height);
+
+            storedTimelineCtx.fillStyle = '#2ecc71';
+            storedTimelineCtx.fillRect(startX - 1, 0, 2, storedTimelineCanvas.height);
+            storedTimelineCtx.fillRect(endX - 1, 0, 2, storedTimelineCanvas.height);
+        }
+
+        // Clear selection for stored audio
+        function clearStoredSelection() {
+            storedSelectionStart = null;
+            storedSelectionEnd = null;
+            storedSelectionStartHandle.style.display = 'none';
+            storedSelectionEndHandle.style.display = 'none';
+            storedSelectionRegion.style.display = 'none';
+            updateStoredSelectionControls();
+        }
+
+        // Play stored audio
+        function playStoredAudioPlayback() {
+            if (storedPlaybackBuffer.length === 0) return;
+
+            if (isStoredPlaying) return;
+
+            // Check if there's a selection
+            if (storedSelectionStart !== null && storedSelectionEnd !== null) {
+                // Play only the selected portion
+                playStoredSelectedAudio();
+                return;
+            }
+
+            // Resume audio context if suspended
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            // Create gain node for volume control
+            storedAudioGain = audioContext.createGain();
+            storedAudioGain.connect(audioContext.destination);
+
+            // Set initial volume
+            const volumeValue = document.getElementById('stored-volume-control').value;
+            storedAudioGain.gain.value = volumeValue / 100;
+
+            // Create an audio buffer for playback
+            const audioBuffer = audioContext.createBuffer(audioChannels, storedPlaybackBuffer.length, audioSampleRate);
+
+            // Fill the buffer with PCM data
+            const channelData = audioBuffer.getChannelData(0);
+            for (let i = 0; i < storedPlaybackBuffer.length; i++) {
+                // Convert Int16 to Float32 (-1.0 to 1.0)
+                channelData[i] = storedPlaybackBuffer[i] / 32768.0;
+            }
+
+            // Create a source node
+            storedAudioSource = audioContext.createBufferSource();
+            storedAudioSource.buffer = audioBuffer;
+            storedAudioSource.connect(storedAudioGain);
+
+            // Start playback
+            isStoredPlaying = true;
+            document.getElementById('play-stored-audio').textContent = 'Stop Audio';
+            document.getElementById('play-stored-audio').classList.add('playing');
+
+            // Play the audio
+            storedAudioSource.start();
+
+            // Handle playback end
+            storedAudioSource.onended = () => {
+                stopStoredAudioPlayback();
+            };
+        }
+
+        // Stop stored audio playback
+        function stopStoredAudioPlayback() {
+            if (!isStoredPlaying) return;
+
+            // Stop the audio source
+            if (storedAudioSource) {
+                try {
+                    storedAudioSource.stop();
+                } catch (e) {
+                    console.log('Error stopping audio source:', e);
+                }
+                storedAudioSource = null;
+            }
+
+            // Disconnect gain node
+            if (storedAudioGain) {
+                storedAudioGain.disconnect();
+                storedAudioGain = null;
+            }
+
+            // Update UI
+            isStoredPlaying = false;
+            document.getElementById('play-stored-audio').textContent = 'Play Audio';
+            document.getElementById('play-stored-audio').classList.remove('playing');
+
+            // No selection button to reset
+        }
+
+        // Play selected audio from stored buffer
+        function playStoredSelectedAudio() {
+            if (storedSelectionStart === null || storedSelectionEnd === null) return;
+
+            // Stop any current playback
+            if (isStoredPlaying) {
+                stopStoredAudioPlayback();
+            }
+
+            // Convert pixel positions to buffer indices
+            const startIdx = Math.floor((storedSelectionStart / storedCanvas.width) * storedPlaybackBuffer.length);
+            const endIdx = Math.floor((storedSelectionEnd / storedCanvas.width) * storedPlaybackBuffer.length);
+
+            // Create a slice of the buffer for the selection
+            const selectedBuffer = storedPlaybackBuffer.slice(startIdx, endIdx);
+
+            // Create an audio buffer for playback
+            const audioBuffer = audioContext.createBuffer(audioChannels, selectedBuffer.length, audioSampleRate);
+
+            // Fill the buffer with PCM data
+            const channelData = audioBuffer.getChannelData(0);
+            for (let i = 0; i < selectedBuffer.length; i++) {
+                // Convert Int16 to Float32 (-1.0 to 1.0)
+                channelData[i] = selectedBuffer[i] / 32768.0;
+            }
+
+            // Create gain node for volume control
+            storedAudioGain = audioContext.createGain();
+            storedAudioGain.connect(audioContext.destination);
+
+            // Set volume
+            const volumeValue = document.getElementById('stored-volume-control').value;
+            storedAudioGain.gain.value = volumeValue / 100;
+
+            // Create a source node
+            storedAudioSource = audioContext.createBufferSource();
+            storedAudioSource.buffer = audioBuffer;
+            storedAudioSource.connect(storedAudioGain);
+
+            // Play the selection
+            isStoredPlaying = true;
+            document.getElementById('play-stored-audio').textContent = 'Stop Audio';
+            document.getElementById('play-stored-audio').classList.add('playing');
+
+            // No selection button to update
+
+            storedAudioSource.start();
+
+            // Handle playback end
+            storedAudioSource.onended = () => {
+                isStoredPlaying = false;
+                storedAudioSource = null;
+                storedAudioGain = null;
+                document.getElementById('play-stored-audio').textContent = 'Play Audio';
+                document.getElementById('play-stored-audio').classList.remove('playing');
+                // No selection button to update
+            };
+        }
+
+
+
+
+        // Draw timeline
+        function drawTimeline() {
+            // Clear timeline canvas
+            timelineCtx.fillStyle = 'rgb(20, 20, 20)';
+            timelineCtx.fillRect(0, 0, timelineCanvas.width, timelineCanvas.height);
+
+            // Calculate total duration in seconds
+            const totalDuration = audioBuffer.length / audioSampleRate;
+
+            // Determine appropriate time interval (0.5s, 1s, 2s, 5s, etc.)
+            let interval = 1; // Default 1 second
+            if (totalDuration > 20) interval = 5;
+            if (totalDuration > 60) interval = 10;
+            if (totalDuration < 5) interval = 0.5;
+
+            // Draw time markers
+            timelineCtx.font = '10px monospace';
+            timelineCtx.fillStyle = '#95a5a6';
+            timelineCtx.textAlign = 'center';
+
+            for (let time = 0; time <= totalDuration; time += interval) {
+                // Convert time to x position
+                const x = (time / totalDuration) * timelineCanvas.width;
+
+                // Draw tick mark
+                timelineCtx.fillStyle = '#95a5a6';
+                timelineCtx.fillRect(x, 0, 1, 5);
+
+                // Draw time label
+                timelineCtx.fillText(time.toFixed(1) + 's', x, 15);
+            }
+
+            // Draw current playback position if playing
+            if (isPlaying) {
+                // This would need to be updated with actual playback position
+                // For now, just show a marker at the end of the buffer
+                const x = timelineCanvas.width;
+                timelineCtx.fillStyle = '#e74c3c';
+                timelineCtx.fillRect(x - 2, 0, 4, timelineCanvas.height);
+            }
+        }
+
+        // Draw grid on waveform
+        function drawGrid() {
+            // Calculate total duration in seconds
+            const totalDuration = audioBuffer.length / audioSampleRate;
+
+            // Determine appropriate time interval
+            let interval = 1; // Default 1 second
+            if (totalDuration > 20) interval = 5;
+            if (totalDuration > 60) interval = 10;
+            if (totalDuration < 5) interval = 0.5;
+
+            // Draw vertical time grid lines
+            canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            canvasCtx.lineWidth = 1;
+
+            for (let time = 0; time <= totalDuration; time += interval) {
+                // Convert time to x position
+                const x = (time / totalDuration) * canvas.width;
+
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(x, 0);
+                canvasCtx.lineTo(x, canvas.height);
+                canvasCtx.stroke();
+            }
+
+            // Draw horizontal amplitude grid lines
+            const amplitudeSteps = 4; // Number of lines above and below center
+
+            for (let i = 1; i <= amplitudeSteps; i++) {
+                const yOffset = (canvas.height / 2) * (i / amplitudeSteps);
+
+                // Line above center
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(0, canvas.height / 2 - yOffset);
+                canvasCtx.lineTo(canvas.width, canvas.height / 2 - yOffset);
+                canvasCtx.stroke();
+
+                // Line below center
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(0, canvas.height / 2 + yOffset);
+                canvasCtx.lineTo(canvas.width, canvas.height / 2 + yOffset);
+                canvasCtx.stroke();
+            }
+        }
+
+        // Auto-load toggle
+        document.getElementById('auto-load-toggle').addEventListener('click', () => {
+            const button = document.getElementById('auto-load-toggle');
+            if (autoLoadInterval) {
+                stopAutoLoad();
+                button.textContent = 'Auto Load: OFF';
+                button.classList.remove('active');
+            } else {
+                startAutoLoad();
+                button.textContent = 'Auto Load: ON';
+                button.classList.add('active');
+                // Immediately load once
+                fetchStoredAudio();
+            }
+        });
+
+        // Initialize canvas and UI on load
+        window.addEventListener('load', () => {
+            initCanvas();
+            updateVolumeMeter(0);
+            updateConnectionStatus();
+            
+            // Display UID on the page
+            document.getElementById('uid-value').textContent = uid;
+
+            // Start auto-loading by default
+            document.getElementById('auto-load-toggle').click();
+        });
+    </script>
+</body>
+
+</html>
