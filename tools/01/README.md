@@ -28,7 +28,7 @@ x/server/
 
 1. Navigate to the server directory:
    ```
-   cd x/server
+   cd tools/01
    ```
 
 2. Run the server:
