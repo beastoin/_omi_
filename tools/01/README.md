@@ -5,7 +5,7 @@ A Golang web server with WebSocket integration that handles real-time transcript
 ## Project Structure
 
 ```
-x/server/
+tools/01/
 ├── main.go           # Main entry point for the server
 ├── templates/        # HTML templates
 │   ├── index.html    # Main page template with WebSocket client
