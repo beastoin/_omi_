@@ -5,15 +5,13 @@ A Golang web server with WebSocket integration that handles real-time transcript
 ## Project Structure
 
 ```
-x/server/
+tools/01/
 ├── main.go           # Main entry point for the server
 ├── templates/        # HTML templates
 │   ├── index.html    # Main page template with WebSocket client
 ├── static/           # Static assets
 │   └── css/
 │       └── style.css # CSS styles
-├── prd.txt           # Product Requirements Document
-├── impl.txt          # Implementation Document
 ├── Dockerfile        # Docker configuration
 ├── docker-compose.yml # Docker Compose configuration
 └── README.md         # This file
@@ -28,7 +26,7 @@ x/server/
 
 1. Navigate to the server directory:
    ```
-   cd x/server
+   cd tools/01
    ```
 
 2. Run the server:
@@ -119,3 +117,13 @@ docker-compose up -d
 ## Integration with Omi
 
 This server is designed to work with the Omi device for real-time transcript and audio processing. For more information on how to integrate with Omi, see the [Omi documentation](https://docs.omi.me/docs/developer/apps/Integrations).
+
+
+## Screenshots
+
+
+https://github.com/user-attachments/assets/b6708fd0-e22a-49a5-8819-71fa2d338755
+
+
+
+
