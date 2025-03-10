@@ -28,8 +28,9 @@ var upgrader = websocket.Upgrader{
 
 // ClientConnection represents a WebSocket connection with its UID
 type ClientConnection struct {
-	conn *websocket.Conn
-	uid  string
+	conn           *websocket.Conn
+	uid            string
+	connectionTime time.Time
 }
 
 // TranscriptHub manages WebSocket connections
@@ -54,10 +55,11 @@ type TranscriptHub struct {
 	unregisterAudio  chan ClientConnection
 	mutex            sync.Mutex
 	
-	// Audio storage - now per UID
-	audioBuffers     map[string][]byte
-	audioBufferMutex sync.Mutex
-	maxAudioBuffer   int
+	// Track all connections with their metadata
+	connections      []ClientConnection
+	audioConnections []ClientConnection
+	
+	// No longer storing audio buffers on server
 }
 
 // NewTranscriptHub creates a new hub instance
@@ -81,8 +83,9 @@ func NewTranscriptHub() *TranscriptHub {
 		registerAudio:   make(chan ClientConnection),
 		unregister:      make(chan ClientConnection),
 		unregisterAudio: make(chan ClientConnection),
-		audioBuffers:    make(map[string][]byte),
-		maxAudioBuffer:  10 * 1024 * 1024, // 10MB max buffer per UID
+		connections:     make([]ClientConnection, 0),
+		audioConnections: make([]ClientConnection, 0),
+		// No longer storing audio buffers on server
 	}
 }
 
@@ -97,6 +100,9 @@ func (h *TranscriptHub) Run() {
 				h.clients[client.uid] = make(map[*websocket.Conn]bool)
 			}
 			h.clients[client.uid][client.conn] = true
+			
+			// Add to connections list
+			h.connections = append(h.connections, client)
 			h.mutex.Unlock()
 			
 		case client := <-h.registerAudio:
@@ -106,6 +112,9 @@ func (h *TranscriptHub) Run() {
 				h.audioClients[client.uid] = make(map[*websocket.Conn]bool)
 			}
 			h.audioClients[client.uid][client.conn] = true
+			
+			// Add to audio connections list
+			h.audioConnections = append(h.audioConnections, client)
 			h.mutex.Unlock()
 			
 		case client := <-h.unregister:
@@ -118,6 +127,14 @@ func (h *TranscriptHub) Run() {
 					// Remove the UID map if empty
 					if len(clientMap) == 0 {
 						delete(h.clients, client.uid)
+					}
+					
+					// Remove from connections list
+					for i, conn := range h.connections {
+						if conn.conn == client.conn && conn.uid == client.uid {
+							h.connections = append(h.connections[:i], h.connections[i+1:]...)
+							break
+						}
 					}
 				}
 			}
@@ -133,6 +150,14 @@ func (h *TranscriptHub) Run() {
 					// Remove the UID map if empty
 					if len(clientMap) == 0 {
 						delete(h.audioClients, client.uid)
+					}
+					
+					// Remove from audio connections list
+					for i, conn := range h.audioConnections {
+						if conn.conn == client.conn && conn.uid == client.uid {
+							h.audioConnections = append(h.audioConnections[:i], h.audioConnections[i+1:]...)
+							break
+						}
 					}
 				}
 			}
@@ -281,8 +306,12 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Register the client with its UID
-	clientConn := ClientConnection{conn: conn, uid: uid}
+	// Register the client with its UID and connection time
+	clientConn := ClientConnection{
+		conn:           conn,
+		uid:            uid,
+		connectionTime: time.Now(),
+	}
 	hub.register <- clientConn
 
 	// Handle disconnection
@@ -300,56 +329,43 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleAudioBuffer returns the stored audio buffer
+// handleAudioBuffer handles audio buffer conversion requests
 func handleAudioBuffer(w http.ResponseWriter, r *http.Request) {
+	// Only accept POST requests for audio data
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
 	// Set headers for audio data
-	w.Header().Set("Content-Type", "audio/pcm")
-	w.Header().Set("Content-Disposition", "attachment; filename=audio_buffer.pcm")
+	w.Header().Set("Content-Type", "audio/wav")
+	w.Header().Set("Content-Disposition", "attachment; filename=audio_buffer.wav")
 	
 	// Get query parameters
-	format := r.URL.Query().Get("format")
+	sampleRate := 8000 // Default
+	channels := 1      // Default
 	
-	// UID is required
-	uid := r.URL.Query().Get("uid")
-	if uid == "" {
-		log.Printf("Audio buffer request without UID")
-		http.Error(w, "UID parameter is required", http.StatusBadRequest)
+	if sampleRateParam := r.URL.Query().Get("sample_rate"); sampleRateParam != "" {
+		fmt.Sscanf(sampleRateParam, "%d", &sampleRate)
+	}
+	
+	if channelsParam := r.URL.Query().Get("channels"); channelsParam != "" {
+		fmt.Sscanf(channelsParam, "%d", &channels)
+	}
+	
+	// Read the PCM data from the request body
+	audioBuffer, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Error reading audio data from request: %v", err)
+		http.Error(w, "Error reading audio data", http.StatusBadRequest)
 		return
 	}
 	
-	// Lock the buffer while reading
-	hub.audioBufferMutex.Lock()
-	defer hub.audioBufferMutex.Unlock()
+	// Create WAV header
+	header := createWavHeader(len(audioBuffer), sampleRate, channels)
 	
-	// Get the audio buffer for this UID
-	audioBuffer, ok := hub.audioBuffers[uid]
-	if !ok {
-		// Return empty response if no buffer exists for this UID
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	
-	if format == "wav" {
-		// Convert PCM to WAV format
-		sampleRate := 8000 // Default
-		channels := 1      // Default
-		
-		if sampleRateParam := r.URL.Query().Get("sample_rate"); sampleRateParam != "" {
-			fmt.Sscanf(sampleRateParam, "%d", &sampleRate)
-		}
-		
-		if channelsParam := r.URL.Query().Get("channels"); channelsParam != "" {
-			fmt.Sscanf(channelsParam, "%d", &channels)
-		}
-		
-		// Create WAV header
-		header := createWavHeader(len(audioBuffer), sampleRate, channels)
-		
-		// Write WAV header
-		w.Header().Set("Content-Type", "audio/wav")
-		w.Header().Set("Content-Disposition", "attachment; filename=audio_buffer.wav")
-		w.Write(header)
-	}
+	// Write WAV header
+	w.Write(header)
 	
 	// Write the audio buffer
 	w.Write(audioBuffer)
@@ -420,12 +436,17 @@ func handleAudioWebSocket(w http.ResponseWriter, r *http.Request) {
 		fmt.Sscanf(channelsParam, "%d", &channels)
 	}
 
+	// Get current time for connection
+	connectionTime := time.Now()
+	
 	// Send initial audio parameters
 	initialStats := map[string]interface{}{
-		"sample_rate": sampleRate,
-		"channels":    channels,
-		"message":     "Connected to audio stream",
-		"uid":         uid,
+		"sample_rate":     sampleRate,
+		"channels":        channels,
+		"message":         "Connected to audio stream",
+		"uid":             uid,
+		"connection_time": connectionTime.Format(time.RFC3339),
+		"connected_since": "0s",
 	}
 	
 	if err := conn.WriteJSON(initialStats); err != nil {
@@ -434,8 +455,12 @@ func handleAudioWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Register the client with its UID
-	clientConn := ClientConnection{conn: conn, uid: uid}
+	// Register the client with its UID and connection time
+	clientConn := ClientConnection{
+		conn:           conn,
+		uid:            uid,
+		connectionTime: time.Now(),
+	}
 	hub.registerAudio <- clientConn
 
 	// Handle disconnection
@@ -591,27 +616,11 @@ func handleAudioProcess(w http.ResponseWriter, r *http.Request) {
 	// Process the audio data
 	log.Printf("Received %d bytes of audio data from user %s", len(audioBytes), uid)
 
-	// Store audio data in buffer for this UID
-	hub.audioBufferMutex.Lock()
+	// No longer storing audio on server
+	// Client will handle buffer storage
 	
-	// Initialize buffer for this UID if it doesn't exist
-	if _, ok := hub.audioBuffers[uid]; !ok {
-		hub.audioBuffers[uid] = make([]byte, 0)
-	}
-	
-	// Append new audio data
-	hub.audioBuffers[uid] = append(hub.audioBuffers[uid], audioBytes...)
-	
-	// Trim buffer if it exceeds max size
-	if len(hub.audioBuffers[uid]) > hub.maxAudioBuffer {
-		excess := len(hub.audioBuffers[uid]) - hub.maxAudioBuffer
-		hub.audioBuffers[uid] = hub.audioBuffers[uid][excess:]
-	}
-	
-	// Get total buffer size for this UID
-	totalBufferSize := len(hub.audioBuffers[uid])
-	
-	hub.audioBufferMutex.Unlock()
+	// Calculate total size for stats only
+	totalBufferSize := len(audioBytes)
 
 	// Calculate audio statistics
 	var peakValue int16 = 0
@@ -649,6 +658,31 @@ func handleAudioProcess(w http.ResponseWriter, r *http.Request) {
 		// Calculate buffer duration in seconds
 		bufferDuration := float64(totalBufferSize) / float64(sampleRate * channels * 2)
 		
+		// Get current time
+		currentTime := time.Now()
+		
+		// Find connection time for this UID if available
+		var connectionTime time.Time
+		var connectedSince string
+		
+		hub.mutex.Lock()
+		if clientMap, ok := hub.audioClients[uid]; ok {
+			for client := range clientMap {
+				// Find the client connection
+				for _, conn := range hub.audioConnections {
+					if conn.conn == client && conn.uid == uid {
+						connectionTime = conn.connectionTime
+						connectedSince = currentTime.Sub(connectionTime).String()
+						break
+					}
+				}
+				if !connectionTime.IsZero() {
+					break
+				}
+			}
+		}
+		hub.mutex.Unlock()
+		
 		// Create audio stats
 		stats := map[string]interface{}{
 			"sample_rate": sampleRate,
@@ -657,9 +691,14 @@ func handleAudioProcess(w http.ResponseWriter, r *http.Request) {
 			"rms_value":   rmsValue,
 			"byte_count":  len(audioBytes),
 			"uid":         uid,
-			"timestamp":   time.Now().UnixMilli(),
-			"total_buffer_size": totalBufferSize,
+			"timestamp":   currentTime.UnixMilli(),
 			"buffer_duration": bufferDuration,
+		}
+		
+		// Add connection time if available
+		if !connectionTime.IsZero() {
+			stats["connection_time"] = connectionTime.Format(time.RFC3339)
+			stats["connected_since"] = connectedSince
 		}
 		
 		// Broadcast audio data to WebSocket clients with the specified UID

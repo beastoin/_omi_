@@ -7,24 +7,50 @@
     <title>Omi Real-Time Processor</title>
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
+    <meta name="theme-color" content="#e60012">
 </head>
 
 <body>
+    <!-- Nintendo-style loader -->
+    <div class="nintendo-loader" id="nintendo-loader">
+        <div class="nintendo-loader-content">
+            <div class="nintendo-loader-spinner"></div>
+            <div class="nintendo-loader-text">LOADING...</div>
+            <div class="nintendo-loader-progress">
+                <div class="nintendo-loader-bar" id="loader-progress-bar"></div>
+            </div>
+        </div>
+    </div>
     <div class="container">
-        <h1>Omi Real-Time</h1>
+        <h1>Omi</h1>
 
         <div class="result-container">
-            <h2>Real-Time Transcript Stream <span id="transcript-status" class="status-indicator">Connecting...</span>
-            </h2>
+            <h2>Real-Time Transcript Stream</h2>
+            <div class="audio-controls">
+                <span id="transcript-status" class="status-indicator">Connecting...</span>
+                <div id="transcript-connection-info">
+                    <span class="connection-label">Connected since:</span>
+                    <span id="transcript-connected-since">-</span>
+                    <span class="connection-label">Connection time:</span>
+                    <span id="transcript-connection-time">-</span>
+                </div>
+            </div>
             <div id="realtime-transcript">
                 <p>Waiting for real-time transcript data...</p>
             </div>
         </div>
 
         <div class="result-container">
-            <h2>Real-Time Audio Waveform</h2>
+            <h2>Real-Time Audio Stream</h2>
             <div class="audio-controls">
                 <span id="audio-status">Disconnected</span>
+                <div id="audio-connection-info">
+                    <span class="connection-label">Connected since:</span>
+                    <span id="audio-connected-since">-</span>
+                    <span class="connection-label">Connection time:</span>
+                    <span id="audio-connection-time">-</span>
+                </div>
             </div>
             <div id="audio-stats">
                 <div class="stat-item">
@@ -56,11 +82,7 @@
                     <span class="stat-value" id="timestamp">-</span>
                 </div>
                 <div class="stat-item">
-                    <span class="stat-label">Buffer Size:</span>
-                    <span class="stat-value" id="buffer-size">-</span> bytes
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Buffer Duration:</span>
+                    <span class="stat-label">Duration:</span>
                     <span class="stat-value" id="buffer-duration">-</span> sec
                 </div>
             </div>
@@ -78,29 +100,36 @@
         </div>
 
         <div class="result-container">
-            <h2>Stored Audio Visualization</h2>
+            <h2>Stored Audio</h2>
             <div class="audio-controls">
                 <button id="load-stored-audio" class="audio-button">Load Stored Audio</button>
                 <button id="auto-load-toggle" class="audio-button auto-load-button">Auto Load: OFF</button>
                 <button id="play-stored-audio" class="audio-button playback-button" disabled>Play Audio</button>
-                <input type="range" id="stored-volume-control" min="0" max="100" value="50" class="volume-slider"
-                    disabled>
-                <span id="stored-volume-label">50%</span>
                 <button id="download-audio" class="audio-button download-button">Download Audio</button>
                 <select id="audio-format" class="audio-format-select">
                     <option value="pcm">PCM Raw</option>
                     <option value="wav" selected>WAV</option>
                 </select>
             </div>
+            <div id="stored-audio-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Buffer Size:</span>
+                    <span class="stat-value" id="stored-buffer-size">-</span> bytes
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Buffer Duration:</span>
+                    <span class="stat-value" id="stored-buffer-duration">-</span> sec
+                </div>
+            </div>
             <div id="stored-waveform-container">
-                <canvas id="stored-waveform" width="800" height="200"></canvas>
+                <canvas id="stored-waveform" width="100%" height="200"></canvas>
                 <div id="stored-selection-overlay">
                     <div id="stored-selection-start-handle" class="selection-handle"></div>
                     <div id="stored-selection-region"></div>
                     <div id="stored-selection-end-handle" class="selection-handle"></div>
                 </div>
                 <div id="stored-timeline-container">
-                    <canvas id="stored-timeline" width="800" height="20"></canvas>
+                    <canvas id="stored-timeline" width="100%" height="20"></canvas>
                 </div>
                 <div id="stored-selection-controls">
                     <span id="stored-selection-time">No selection</span>
@@ -110,6 +139,13 @@
     </div>
 
 
+    <!-- Nintendo sound effects -->
+    <audio id="switch-click-sound" preload="auto">
+        <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADwAD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAZUAAAAALgAAA8AhMBJwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=" type="audio/mp3">
+    </audio>
+    <audio id="switch-success-sound" preload="auto">
+        <source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADwAD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAZUAAAAALgAAA8AhMBJwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=" type="audio/mp3">
+    </audio>
     <script>
         // Get UID from URL query parameter - required
         const urlParams = new URLSearchParams(window.location.search);
@@ -131,6 +167,14 @@
                 console.log('WebSocket connection established');
                 document.getElementById('transcript-status').textContent = 'Connected';
                 document.getElementById('transcript-status').classList.add('connected');
+                document.getElementById('transcript-status').classList.remove('reconnecting', 'error');
+                
+                // Set connection time
+                const connectionTime = new Date();
+                document.getElementById('transcript-connection-time').textContent = connectionTime.toLocaleTimeString();
+                
+                // Start updating the "connected since" timer
+                startTranscriptConnectionTimer(connectionTime);
             };
 
             socket.onmessage = (event) => {
@@ -150,16 +194,28 @@
 
             socket.onclose = () => {
                 console.log('WebSocket connection closed. Reconnecting...');
-                document.getElementById('transcript-status').textContent = 'Disconnected - Reconnecting...';
+                document.getElementById('transcript-status').textContent = 'Reconnecting...';
                 document.getElementById('transcript-status').classList.remove('connected');
                 document.getElementById('transcript-status').classList.add('reconnecting');
+                document.getElementById('transcript-status').classList.remove('error');
+                
+                // Clear the connection timer
+                if (transcriptTimerInterval) {
+                    clearInterval(transcriptTimerInterval);
+                    transcriptTimerInterval = null;
+                }
+                
+                // Reset connection time display
+                document.getElementById('transcript-connected-since').textContent = '-';
+                document.getElementById('transcript-connection-time').textContent = '-';
+                
                 setTimeout(connectWebSocket, 3000);
             };
 
             socket.onerror = (error) => {
                 console.error('WebSocket error:', error);
-                document.getElementById('transcript-status').textContent = 'Error - Reconnecting...';
-                document.getElementById('transcript-status').classList.remove('connected');
+                document.getElementById('transcript-status').textContent = 'Error';
+                document.getElementById('transcript-status').classList.remove('connected', 'reconnecting');
                 document.getElementById('transcript-status').classList.add('error');
                 socket.close();
             };
@@ -185,7 +241,10 @@
                 console.log('Processing segment:', segment);
 
                 const segmentDiv = document.createElement('div');
-                segmentDiv.className = `segment ${segment.is_user ? 'user-segment' : 'speaker-segment'}`;
+                
+                // Determine speaker color class (up to 7 colors)
+                const speakerColorClass = `speaker-color-${segment.speaker_id % 7}`;
+                segmentDiv.className = `segment ${segment.is_user ? 'user-segment' : 'speaker-segment'} ${speakerColorClass}`;
 
                 const speakerDiv = document.createElement('div');
                 speakerDiv.className = 'segment-speaker';
@@ -203,13 +262,41 @@
                 segmentDiv.appendChild(timeDiv);
                 segmentDiv.appendChild(textDiv);
 
-                container.appendChild(segmentDiv);
+                // Add to the top of the container instead of the bottom
+                container.insertBefore(segmentDiv, container.firstChild);
             });
 
-            // Scroll to the bottom to show the latest segments
-            container.scrollTop = container.scrollHeight;
+            // No need to scroll since we're adding to the top
         };
 
+        // Function to start and update the transcript connection timer
+        let transcriptTimerInterval = null;
+        function startTranscriptConnectionTimer(startTime) {
+            // Clear any existing timer
+            if (transcriptTimerInterval) {
+                clearInterval(transcriptTimerInterval);
+            }
+            
+            // Update immediately
+            updateTranscriptConnectionTime(startTime);
+            
+            // Then update every second
+            transcriptTimerInterval = setInterval(() => {
+                updateTranscriptConnectionTime(startTime);
+            }, 1000);
+        }
+        
+        function updateTranscriptConnectionTime(startTime) {
+            const now = new Date();
+            const diffMs = now - startTime;
+            const diffSec = Math.floor(diffMs / 1000);
+            
+            // Just show raw seconds
+            const timeString = `${diffSec}s`;
+            
+            document.getElementById('transcript-connected-since').textContent = timeString;
+        }
+        
         // Connect to WebSocket when the page loads
         window.addEventListener('load', () => {
             connectWebSocket();
@@ -345,6 +432,19 @@
             if (playbackBuffer.length > PLAYBACK_BUFFER_SIZE) {
                 playbackBuffer = playbackBuffer.slice(playbackBuffer.length - PLAYBACK_BUFFER_SIZE);
             }
+            
+            // Add to client-side persistent buffer
+            const newData = new Uint8Array(data);
+            const newBuffer = new Uint8Array(clientAudioBuffer.length + newData.length);
+            newBuffer.set(clientAudioBuffer);
+            newBuffer.set(newData, clientAudioBuffer.length);
+            clientAudioBuffer = newBuffer;
+            
+            // Trim client buffer if it exceeds max size
+            if (clientAudioBuffer.length > MAX_CLIENT_BUFFER_SIZE) {
+                const excess = clientAudioBuffer.length - MAX_CLIENT_BUFFER_SIZE;
+                clientAudioBuffer = clientAudioBuffer.slice(excess);
+            }
 
             // Draw waveform
             drawWaveform(audioBuffer);
@@ -409,10 +509,20 @@
                 console.log('Audio WebSocket connection established');
                 isAudioConnected = true;
                 audioReconnectAttempts = 0; // Reset reconnect attempts on successful connection
-
+                
+                // Set connection time
+                const connectionTime = new Date();
+                audioConnectionTime = connectionTime;
+                
                 document.getElementById('audio-status').textContent = 'Connected';
                 document.getElementById('audio-status').classList.add('connected');
                 document.getElementById('audio-status').classList.remove('reconnecting', 'error');
+                
+                // Update connection time display
+                document.getElementById('audio-connection-time').textContent = connectionTime.toLocaleTimeString();
+                
+                // Start updating the "connected since" timer
+                startAudioConnectionTimer(connectionTime);
             };
 
             audioSocket.onmessage = (event) => {
@@ -461,11 +571,17 @@
                             const date = new Date(data.timestamp);
                             document.getElementById('timestamp').textContent = date.toLocaleTimeString();
                         }
-
-                        if (data.total_buffer_size !== undefined) {
-                            document.getElementById('buffer-size').textContent = data.total_buffer_size;
-                        }
                         
+                        if (data.connection_time) {
+                            const connectionTime = new Date(data.connection_time);
+                            document.getElementById('audio-connection-time').textContent = connectionTime.toLocaleTimeString();
+                            
+                            // If we have a connected_since value from the server, use it
+                            if (data.connected_since) {
+                                document.getElementById('audio-connected-since').textContent = data.connected_since;
+                            }
+                        }
+
                         if (data.buffer_duration !== undefined) {
                             document.getElementById('buffer-duration').textContent = data.buffer_duration.toFixed(2);
                         }
@@ -480,11 +596,19 @@
             audioSocket.onclose = (event) => {
                 console.log('Audio WebSocket connection closed', event.code, event.reason);
                 isAudioConnected = false;
+                
+                // Clear the connection timer
+                if (audioTimerInterval) {
+                    clearInterval(audioTimerInterval);
+                    audioTimerInterval = null;
+                }
 
                 // Don't attempt to reconnect if manually disconnected
                 if (event.code === 1000) {
                     document.getElementById('audio-status').textContent = 'Disconnected';
                     document.getElementById('audio-status').classList.remove('connected', 'error', 'reconnecting');
+                    document.getElementById('audio-connected-since').textContent = '-';
+                    document.getElementById('audio-connection-time').textContent = '-';
 
                     // Stop playback if active
                     stopAudioPlayback();
@@ -558,14 +682,43 @@
             }
         }
 
+        // Audio connection time variables
+        let audioConnectionTime = null;
+        let audioTimerInterval = null;
+        
+        // Function to start and update the audio connection timer
+        function startAudioConnectionTimer(startTime) {
+            // Clear any existing timer
+            if (audioTimerInterval) {
+                clearInterval(audioTimerInterval);
+            }
+            
+            // Update immediately
+            updateAudioConnectionTime(startTime);
+            
+            // Then update every second
+            audioTimerInterval = setInterval(() => {
+                updateAudioConnectionTime(startTime);
+            }, 1000);
+        }
+        
+        function updateAudioConnectionTime(startTime) {
+            const now = new Date();
+            const diffMs = now - startTime;
+            const diffSec = Math.floor(diffMs / 1000);
+            
+            // Just show raw seconds
+            const timeString = `${diffSec}s`;
+            
+            document.getElementById('audio-connected-since').textContent = timeString;
+        }
+        
         // Update connection status display
         function updateConnectionStatus() {
-            const transcriptStatus = document.getElementById('transcript-status');
             const audioStatus = document.getElementById('audio-status');
-
-            // Add status indicators to the page
-            transcriptStatus.classList.add('status-indicator');
             audioStatus.classList.add('status-indicator');
+            
+            // Transcript status now follows audio status style
         }
 
         // Update volume meter
@@ -607,28 +760,59 @@
             document.getElementById('peak-value').textContent = Math.round(level * 32768);
         }
 
-        // Add pulse animation to style
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes pulse {
-                from { opacity: 0.8; }
-                to { opacity: 1; box-shadow: 0 0 10px #ff3030; }
-            }
-        `;
-        document.head.appendChild(style);
+        // No need for style element - moved to CSS file
 
-        // Download audio buffer
+        // Download audio buffer - now uses client-side data
         document.getElementById('download-audio').addEventListener('click', () => {
+            // Play Nintendo Switch click sound
+            document.getElementById('switch-click-sound').play();
+            
             const format = document.getElementById('audio-format').value;
-            const url = `/audio/buffer?format=${format}&sample_rate=${audioSampleRate}&channels=${audioChannels}&uid=${uid}`;
-
-            // Create a temporary link and trigger download
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `audio_buffer.${format}`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            
+            if (clientAudioBuffer.byteLength === 0) {
+                alert('No audio data available to download');
+                return;
+            }
+            
+            if (format === 'wav') {
+                // Send to server for WAV conversion
+                fetch(`/audio/buffer?sample_rate=${audioSampleRate}&channels=${audioChannels}`, {
+                    method: 'POST',
+                    body: clientAudioBuffer
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    // Create download link
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'audio_buffer.wav';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error downloading WAV:', error);
+                    alert('Error creating WAV file');
+                });
+            } else {
+                // PCM download directly from client
+                const blob = new Blob([clientAudioBuffer], { type: 'audio/pcm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'audio_buffer.pcm';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
         });
 
         // Stored audio visualization
@@ -647,6 +831,8 @@
         // Stored audio variables
         let storedAudioBuffer = [];
         let storedPlaybackBuffer = [];
+        let clientAudioBuffer = new Uint8Array(); // Main client-side buffer for all audio data
+        const MAX_CLIENT_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB max buffer
         let storedSelectionStart = null;
         let storedSelectionEnd = null;
         let isStoredSelecting = false;
@@ -659,6 +845,9 @@
 
         // Load stored audio
         document.getElementById('load-stored-audio').addEventListener('click', () => {
+            // Play Nintendo Switch click sound
+            document.getElementById('switch-click-sound').play();
+            
             // Clear any existing selection before loading new audio
             clearStoredSelection();
             fetchStoredAudio();
@@ -686,6 +875,9 @@
 
         // Play stored audio
         document.getElementById('play-stored-audio').addEventListener('click', () => {
+            // Play Nintendo Switch click sound
+            document.getElementById('switch-click-sound').play();
+            
             if (isStoredPlaying) {
                 stopStoredAudioPlayback();
             } else {
@@ -693,85 +885,69 @@
             }
         });
 
-        // Volume control for stored audio
-        document.getElementById('stored-volume-control').addEventListener('input', (e) => {
-            const volumeValue = e.target.value;
-            document.getElementById('stored-volume-label').textContent = `${volumeValue}%`;
 
-            if (storedAudioGain) {
-                storedAudioGain.gain.value = volumeValue / 100;
-            }
-        });
-
-        // Fetch stored audio from server
+        // Use client-side stored audio instead of fetching from server
         function fetchStoredAudio() {
             // Save current selection positions
             const prevSelectionStart = storedSelectionStart;
             const prevSelectionEnd = storedSelectionEnd;
             const prevBufferLength = storedAudioBuffer.length;
 
-            fetch(`/audio/buffer?format=pcm&sample_rate=${audioSampleRate}&channels=${audioChannels}&uid=${uid}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-                    }
-                    return response.arrayBuffer();
-                })
-                .then(buffer => {
-                    if (buffer.byteLength === 0) {
-                        console.log('No audio data available yet');
-                        return;
-                    }
+            // Use the client-side buffer instead of fetching from server
+            if (clientAudioBuffer.byteLength === 0) {
+                console.log('No audio data available yet');
+                return;
+            }
 
-                    const pcmData = new Int16Array(buffer);
-                    storedAudioBuffer = Array.from(pcmData);
-                    storedPlaybackBuffer = Array.from(pcmData);
+            // Convert to Int16Array for processing
+            const pcmData = new Int16Array(clientAudioBuffer.buffer);
+            storedAudioBuffer = Array.from(pcmData);
+            storedPlaybackBuffer = Array.from(pcmData);
 
-                    // Reset selection state
-                    isStoredSelecting = false;
-                    isStoredDraggingStart = false;
-                    isStoredDraggingEnd = false;
+            // Reset selection state
+            isStoredSelecting = false;
+            isStoredDraggingStart = false;
+            isStoredDraggingEnd = false;
 
-                    // Initialize stored audio canvas
-                    initStoredCanvas();
+            // Initialize stored audio canvas
+            initStoredCanvas();
 
-                    // Draw waveform
-                    drawStoredWaveform(storedAudioBuffer);
+            // Draw waveform
+            drawStoredWaveform(storedAudioBuffer);
 
-                    // Draw timeline
-                    drawStoredTimeline();
+            // Draw timeline
+            drawStoredTimeline();
 
-                    // Enable playback controls
-                    document.getElementById('play-stored-audio').disabled = false;
-                    document.getElementById('stored-volume-control').disabled = false;
+            // Enable playback controls
+            document.getElementById('play-stored-audio').disabled = false;
+            
+            // Update buffer stats
+            document.getElementById('stored-buffer-size').textContent = clientAudioBuffer.byteLength;
+            const bufferDuration = clientAudioBuffer.byteLength / (audioSampleRate * audioChannels * 2);
+            document.getElementById('stored-buffer-duration').textContent = bufferDuration.toFixed(2);
 
-                    // Try to restore selection if buffer size hasn't changed dramatically
-                    if (prevSelectionStart !== null && prevSelectionEnd !== null &&
-                        Math.abs(prevBufferLength - storedAudioBuffer.length) < 1000) {
-                        // Restore selection
-                        storedSelectionStart = prevSelectionStart;
-                        storedSelectionEnd = prevSelectionEnd;
+            // Try to restore selection if buffer size hasn't changed dramatically
+            if (prevSelectionStart !== null && prevSelectionEnd !== null &&
+                Math.abs(prevBufferLength - storedAudioBuffer.length) < 1000) {
+                // Restore selection
+                storedSelectionStart = prevSelectionStart;
+                storedSelectionEnd = prevSelectionEnd;
 
-                        // Update selection display
-                        storedSelectionStartHandle.style.left = `${storedSelectionStart}px`;
-                        storedSelectionEndHandle.style.left = `${storedSelectionEnd}px`;
-                        storedSelectionStartHandle.style.display = 'block';
-                        storedSelectionEndHandle.style.display = 'block';
+                // Update selection display
+                storedSelectionStartHandle.style.left = `${storedSelectionStart}px`;
+                storedSelectionEndHandle.style.left = `${storedSelectionEnd}px`;
+                storedSelectionStartHandle.style.display = 'block';
+                storedSelectionEndHandle.style.display = 'block';
 
-                        storedSelectionRegion.style.left = `${storedSelectionStart}px`;
-                        storedSelectionRegion.style.width = `${storedSelectionEnd - storedSelectionStart}px`;
-                        storedSelectionRegion.style.display = 'block';
+                storedSelectionRegion.style.left = `${storedSelectionStart}px`;
+                storedSelectionRegion.style.width = `${storedSelectionEnd - storedSelectionStart}px`;
+                storedSelectionRegion.style.display = 'block';
 
-                        updateStoredSelectionControls();
-                    } else {
-                        // Clear any existing selection
-                        clearStoredSelection();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching stored audio:', error);
-                    // Don't stop auto-loading on error, just log it
-                });
+                updateStoredSelectionControls();
+            } else {
+                // Clear any existing selection
+                clearStoredSelection();
+            }
         }
 
         // Initialize stored audio canvas
@@ -808,24 +984,28 @@
             storedCanvasCtx.lineTo(storedCanvas.width, storedCanvas.height / 2);
             storedCanvasCtx.stroke();
 
+            // Calculate how many samples to skip to ensure we use the full width
+            const skipFactor = Math.max(1, Math.floor(audioData.length / storedCanvas.width));
+            
             // Draw waveform
-            const sliceWidth = storedCanvas.width / audioData.length;
+            const sliceWidth = storedCanvas.width / (audioData.length / skipFactor);
             let x = 0;
 
             // Draw filled waveform
             storedCanvasCtx.beginPath();
             storedCanvasCtx.moveTo(0, storedCanvas.height / 2);
 
-            for (let i = 0; i < audioData.length; i += Math.max(1, Math.floor(audioData.length / 1000))) {
+            for (let i = 0; i < audioData.length; i += skipFactor) {
                 // Convert PCM value to normalized value between -1 and 1
                 const pcmValue = audioData[i];
                 // Scale to canvas height
                 const y = (pcmValue / 32768) * storedCanvas.height / 2 + storedCanvas.height / 2;
 
                 storedCanvasCtx.lineTo(x, y);
-                x += sliceWidth * Math.max(1, Math.floor(audioData.length / 1000));
+                x += sliceWidth;
             }
 
+            // Ensure the path reaches the right edge
             storedCanvasCtx.lineTo(storedCanvas.width, storedCanvas.height / 2);
             storedCanvasCtx.closePath();
 
@@ -845,7 +1025,7 @@
             x = 0;
             storedCanvasCtx.beginPath();
 
-            for (let i = 0; i < audioData.length; i += Math.max(1, Math.floor(audioData.length / 1000))) {
+            for (let i = 0; i < audioData.length; i += skipFactor) {
                 const pcmValue = audioData[i];
                 const y = (pcmValue / 32768) * storedCanvas.height / 2 + storedCanvas.height / 2;
 
@@ -855,9 +1035,14 @@
                     storedCanvasCtx.lineTo(x, y);
                 }
 
-                x += sliceWidth * Math.max(1, Math.floor(audioData.length / 1000));
+                x += sliceWidth;
             }
 
+            // Ensure the stroke reaches the right edge
+            if (x < storedCanvas.width) {
+                storedCanvasCtx.lineTo(storedCanvas.width, storedCanvas.height / 2);
+            }
+            
             storedCanvasCtx.stroke();
         }
 
@@ -946,6 +1131,11 @@
 
         // Initialize stored canvas
         function initStoredCanvas() {
+            // Set canvas width to match container width
+            const containerWidth = document.getElementById('stored-waveform-container').clientWidth - 30; // Subtract padding
+            storedCanvas.width = containerWidth;
+            storedTimelineCanvas.width = containerWidth;
+            
             storedCanvasCtx.fillStyle = 'rgb(20, 20, 20)';
             storedCanvasCtx.fillRect(0, 0, storedCanvas.width, storedCanvas.height);
 
@@ -1140,13 +1330,10 @@
                 audioContext.resume();
             }
 
-            // Create gain node for volume control
+            // Create gain node with 100% volume
             storedAudioGain = audioContext.createGain();
             storedAudioGain.connect(audioContext.destination);
-
-            // Set initial volume
-            const volumeValue = document.getElementById('stored-volume-control').value;
-            storedAudioGain.gain.value = volumeValue / 100;
+            storedAudioGain.gain.value = 1.0; // Always 100% volume
 
             // Create an audio buffer for playback
             const audioBuffer = audioContext.createBuffer(audioChannels, storedPlaybackBuffer.length, audioSampleRate);
@@ -1231,13 +1418,10 @@
                 channelData[i] = selectedBuffer[i] / 32768.0;
             }
 
-            // Create gain node for volume control
+            // Create gain node with 100% volume
             storedAudioGain = audioContext.createGain();
             storedAudioGain.connect(audioContext.destination);
-
-            // Set volume
-            const volumeValue = document.getElementById('stored-volume-control').value;
-            storedAudioGain.gain.value = volumeValue / 100;
+            storedAudioGain.gain.value = 1.0; // Always 100% volume
 
             // Create a source node
             storedAudioSource = audioContext.createBufferSource();
@@ -1356,6 +1540,9 @@
 
         // Auto-load toggle
         document.getElementById('auto-load-toggle').addEventListener('click', () => {
+            // Play Nintendo Switch click sound
+            document.getElementById('switch-click-sound').play();
+            
             const button = document.getElementById('auto-load-toggle');
             if (autoLoadInterval) {
                 stopAutoLoad();
@@ -1367,11 +1554,43 @@
                 button.classList.add('active');
                 // Immediately load once
                 fetchStoredAudio();
+                
+                // Play success sound
+                setTimeout(() => {
+                    document.getElementById('switch-success-sound').play();
+                }, 300);
             }
         });
 
+        // Nintendo loader animation
+        function simulateLoading() {
+            const loader = document.getElementById('nintendo-loader');
+            const progressBar = document.getElementById('loader-progress-bar');
+            let progress = 0;
+            
+            // Simulate progress
+            const interval = setInterval(() => {
+                progress += Math.random() * 10;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(interval);
+                    
+                    // Hide loader after a short delay
+                    setTimeout(() => {
+                        loader.classList.add('hidden');
+                        // Play success sound
+                        document.getElementById('switch-success-sound').play();
+                    }, 500);
+                }
+                progressBar.style.width = `${progress}%`;
+            }, 200);
+        }
+        
         // Initialize canvas and UI on load
         window.addEventListener('load', () => {
+            // Start loader animation
+            simulateLoading();
+            
             initCanvas();
             updateVolumeMeter(0);
             updateConnectionStatus();
@@ -1380,7 +1599,19 @@
             document.getElementById('uid-value').textContent = uid;
 
             // Start auto-loading by default
-            document.getElementById('auto-load-toggle').click();
+            setTimeout(() => {
+                document.getElementById('auto-load-toggle').click();
+            }, 2000); // Wait for loader to finish
+        });
+        
+        // Handle window resize to adjust canvas sizes
+        window.addEventListener('resize', () => {
+            // Only redraw if we have data
+            if (storedAudioBuffer.length > 0) {
+                initStoredCanvas();
+                drawStoredWaveform(storedAudioBuffer);
+                drawStoredTimeline();
+            }
         });
     </script>
 </body>
