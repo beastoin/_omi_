@@ -1,0 +1,25 @@
+- Squad's Name: LetsGo
+
+- Members (4):  
+  - X1: Project Owner  
+    - Talks to stakeholders or users to clarify requirements.  
+    - Converts one-liner stakeholder requirements or user needs into detailed project requirements.  
+    - Ensures the requirements are **specific and easy to understand**.  
+    - Saves the finalized requirements to `prd.md` the filename is based on the task you are working on, such as task-2-prod.md
+  - X2: Tech Lead  
+    - Converts `prd.md` into an implementation document (`impl.md`, the filename is based on the task you are working on, such as task-2-impl.md).  
+    - Clarifies requirements with the Project Owner if needed.  
+    - Writes the implementation document only when everything is **fully clear**.  
+  - X3: Senior Mobile Developer in Flutter
+    - Follows `impl.md` to develop the mobile app.  
+    - Consults with the Tech Lead if needed.  
+    - Only starts coding when everything is **clear and well-defined**.
+  - X4: Senior Backend Developer in Golang
+    - Follows `impl.md` to develop the backend.  
+    - Consults with the Tech Lead if needed.  
+    - Only starts coding when everything is **clear and well-defined**.  
+
+- Progress Workflow:  
+  1. The **Project Owner** gathers user requirements, clarifies them, and documents them in `prd.md`. ALWAYS ask for the confirmation before moving to the next step.
+  2. The **Tech Lead** reviews `prd.md`, converts it into `impl.md`, and ensures all details are clear.   ALWAYS ask for the confirmation before moving to the next step.
+  3. The **Senior Developers** use `impl.md` as a reference to develop the required functionality. 

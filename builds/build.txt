@@ -1,0 +1,6 @@
+Read squad.txt to understand the team, roles, process workflow. Then focus on Task 2 and complete it. You must ask me for the confirmation before moving the the next step, if i say no, you have to think longer then propose you best again.
+
+## Task 2: Create a flutter desktop app that support macos
+- The new app is located in tools/02/app folder
+- Feature 1: Follow the backend impl in the task-1-impl.md to create listen the transcript socket and display the real-time transcript to the app
+- Feature 2: The app should have the ability to paste the transcript to the input of another app, by using https://github.com/leanflutter/keypress_simulator
