@@ -163,11 +163,15 @@ class TranscriptManager extends ChangeNotifier {
   }
   
   Future<void> _autoPasteNewSegments(List<TranscriptSegment> newSegments) async {
-    if (!_autoPaste) return;
+    if (!_autoPaste || newSegments.isEmpty) return;
     
     try {
       // Get text from new segments only
-      final text = newSegments.map((segment) => segment.text).join(' ');
+      final text = newSegments.map((segment) {
+        final speaker = segment.speaker.isNotEmpty ? '[${segment.speaker}]' : '';
+        final timestamp = DateFormat('HH:mm:ss').format(segment.timestamp);
+        return '$speaker ($timestamp): ${segment.text}';
+      }).join(' '); // Add space between segments
       
       // Copy to clipboard
       await Clipboard.setData(ClipboardData(text: text));

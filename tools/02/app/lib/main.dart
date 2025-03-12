@@ -16,7 +16,7 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (context) => TranscriptManager(),
       child: MaterialApp(
-        title: 'Omi Transcript',
+        title: 'Omi Flow',
         theme: NintendoTheme.lightTheme,
         darkTheme: NintendoTheme.darkTheme,
         themeMode: ThemeMode.system,

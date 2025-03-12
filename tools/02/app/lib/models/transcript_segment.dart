@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 class TranscriptSegment {
+  final String id; // Unique identifier for the segment
   final String text;
   final String speaker;
   final int speakerId;
@@ -11,6 +12,7 @@ class TranscriptSegment {
   final DateTime timestamp;
 
   TranscriptSegment({
+    String? id,
     required this.text,
     required this.speaker,
     required this.speakerId,
@@ -19,10 +21,15 @@ class TranscriptSegment {
     required this.startTime,
     required this.endTime,
     required this.timestamp,
-  });
+  }) : id = id ?? '${timestamp.millisecondsSinceEpoch}_${startTime}_$speakerId';
 
   factory TranscriptSegment.fromJson(Map<String, dynamic> json) {
+    final timestamp = json['timestamp'] != null
+        ? DateTime.parse(json['timestamp'])
+        : DateTime.now();
+    
     return TranscriptSegment(
+      id: json['id'] as String?,
       text: json['text'] as String,
       speaker: json['speaker'] as String,
       speakerId: json['speaker_id'] as int,
@@ -34,14 +41,13 @@ class TranscriptSegment {
       endTime: (json['end'] is int) 
           ? (json['end'] as int).toDouble() 
           : json['end'] as double,
-      timestamp: json['timestamp'] != null
-          ? DateTime.parse(json['timestamp'])
-          : DateTime.now(),
+      timestamp: timestamp,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'text': text,
       'speaker': speaker,
       'speaker_id': speakerId,
@@ -55,6 +61,6 @@ class TranscriptSegment {
 
   @override
   String toString() {
-    return 'TranscriptSegment{text: $text, speaker: $speaker, speakerId: $speakerId, startTime: $startTime, endTime: $endTime}';
+    return 'TranscriptSegment{id: $id, text: $text, speaker: $speaker, speakerId: $speakerId, startTime: $startTime, endTime: $endTime}';
   }
 }

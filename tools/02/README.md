@@ -72,28 +72,26 @@ The built app will be available in `build/macos/Build/Products/Release/`.
 The app expects to connect to a WebSocket server that sends transcript data in the following JSON format:
 
 ```json
-[
- {
-   "text": "Transcript text content",
-   "speaker": "Speaker Name",
-   "speaker_id": 1,
-   "is_user": false,
-   "person_id": "optional-id",
-   "start": 0.0,
-   "end": 5.0,
-   "timestamp": "2023-01-01T12:00:00Z"
- }
-]
+{
+  "segments": [
+    {
+      "text": "Transcript text content",
+      "speaker": "Speaker Name",
+      "speaker_id": 1,
+      "is_user": false,
+      "person_id": "optional-id",
+      "start": 0.0,
+      "end": 5.0,
+      "timestamp": "2023-01-01T12:00:00Z"
+    }
+  ]
+}
 ```
 
 ## Troubleshooting
 
 - **Connection Issues**: Ensure the WebSocket server is running and accessible. Check the server URL in the settings.
 - **Paste Functionality**: The paste functionality requires macOS permissions for accessibility. Go to System Preferences > Security & Privacy > Privacy > Accessibility and add the app to the list of allowed applications.
-
-## Screenshots
-![image](https://github.com/user-attachments/assets/817402aa-f24e-4cc1-8b73-e3a813268be9)
-
 
 ## License
 

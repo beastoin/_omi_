@@ -1,5 +1,5 @@
-name: omi_transcript_app
-description: A desktop app for displaying real-time transcripts
+name: omi_flow_app
+description: A desktop app for displaying and managing real-time transcripts
 publish_to: 'none'
 version: 1.0.0+1
 

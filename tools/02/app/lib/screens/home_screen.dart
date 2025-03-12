@@ -25,12 +25,24 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final manager = Provider.of<TranscriptManager>(context, listen: false);
       manager.connect();
+      
+      // Auto-paste is now handled directly in the TranscriptManager
+      // No need to add a listener here
     });
   }
-
+  
+  @override
+  void dispose() {
+    // No listener to remove
+    super.dispose();
+  }
+  
   Future<void> _copyToClipboard(BuildContext context) async {
     final manager = Provider.of<TranscriptManager>(context, listen: false);
     final text = manager.getTranscriptText();
+    
+    // If there's no text to copy, return early
+    if (text.isEmpty) return;
     
     await Clipboard.setData(ClipboardData(text: text));
     
@@ -46,61 +58,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       );
-    }
-  }
-
-  Future<void> _pasteToActiveApp(BuildContext context) async {
-    if (_isPasting) return;
-    
-    setState(() {
-      _isPasting = true;
-    });
-    
-    try {
-      // First copy to clipboard
-      await _copyToClipboard(context);
-      
-      // Then simulate Cmd+V keystroke
-      await keyPressSimulator.simulateKeyDown(
-        PhysicalKeyboardKey.keyV,
-        [ModifierKey.metaModifier],
-      );
-      
-      await keyPressSimulator.simulateKeyUp(
-        PhysicalKeyboardKey.keyV,
-        [ModifierKey.metaModifier],
-      );
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Pasted to active application!'),
-            duration: const Duration(seconds: 2),
-            backgroundColor: NintendoTheme.neonRed,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to paste: $e'),
-            backgroundColor: Colors.red[800],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-        );
-      }
-    } finally {
-      setState(() {
-        _isPasting = false;
-      });
     }
   }
 
@@ -122,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ).createShader(bounds),
               child: const Text(
-                'Omi Transcript',
+                'Omi Flow',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 24,
@@ -245,50 +202,75 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: NintendoTheme.neonRed.withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      icon: _isPasting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.paste, size: 24),
-                      label: const Text(
-                        'Paste to Active App',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: NintendoTheme.neonRed,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(
+                  Consumer<TranscriptManager>(
+                    builder: (context, manager, child) {
+                      return Container(
+                        decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
-                          side: BorderSide(
-                            color: Colors.white.withOpacity(0.5),
-                            width: 1,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? NintendoTheme.nintendoDarkGray.withOpacity(0.7)
+                              : Colors.white.withOpacity(0.7),
+                          boxShadow: [
+                            BoxShadow(
+                              color: manager.autoPaste 
+                                  ? NintendoTheme.neonRed.withOpacity(0.4)
+                                  : Colors.black.withOpacity(0.1),
+                              blurRadius: 5,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: manager.autoPaste 
+                                ? NintendoTheme.neonRed
+                                : Colors.grey.withOpacity(0.5),
+                            width: 2,
                           ),
                         ),
-                        elevation: 5,
-                      ),
-                      onPressed: _isPasting ? null : () => _pasteToActiveApp(context),
-                    ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            Text(
+                              'Auto-Paste',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: manager.autoPaste 
+                                    ? NintendoTheme.neonRed
+                                    : Theme.of(context).textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Switch(
+                              value: manager.autoPaste,
+                              onChanged: (value) {
+                                manager.saveSettings(
+                                  serverUrl: manager.serverUrl,
+                                  autoPaste: value,
+                                );
+                                
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      value 
+                                          ? 'Auto-paste enabled! New transcript segments will be pasted automatically.'
+                                          : 'Auto-paste disabled.',
+                                    ),
+                                    duration: const Duration(seconds: 2),
+                                    backgroundColor: value ? NintendoTheme.neonRed : Colors.grey,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                );
+                              },
+                              activeColor: NintendoTheme.neonRed,
+                              activeTrackColor: NintendoTheme.neonRed.withOpacity(0.5),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

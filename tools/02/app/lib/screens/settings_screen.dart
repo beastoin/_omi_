@@ -13,14 +13,12 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _serverUrlController;
   bool _autoReconnect = true;
-  bool _autoPaste = true;
 
   @override
   void initState() {
     super.initState();
     final manager = Provider.of<TranscriptManager>(context, listen: false);
     _serverUrlController = TextEditingController(text: manager.serverUrl);
-    _autoPaste = manager.autoPaste;
   }
 
   @override
@@ -198,23 +196,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             });
                           },
                         ),
-                        const Divider(),
-                        SwitchListTile(
-                          title: const Text(
-                            'Auto Paste',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: const Text(
-                            'Automatically paste new transcript text to active app',
-                          ),
-                          value: _autoPaste,
-                          activeColor: NintendoTheme.neonRed,
-                          onChanged: (value) {
-                            setState(() {
-                              _autoPaste = value;
-                            });
-                          },
-                        ),
                       ],
                     ),
                   ),
@@ -241,7 +222,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await manager.saveSettings(
                           serverUrl: _serverUrlController.text,
                           autoReconnect: _autoReconnect,
-                          autoPaste: _autoPaste,
                         );
                         
                         if (context.mounted) {
