@@ -58,7 +58,7 @@ class TranscriptManager extends ChangeNotifier {
       _autoReconnect = autoReconnect;
       await prefs.setBool('auto_reconnect', autoReconnect);
     }
-    
+
     if (autoPaste != null) {
       _autoPaste = autoPaste;
       await prefs.setBool('auto_paste', autoPaste);
@@ -152,7 +152,7 @@ class TranscriptManager extends ChangeNotifier {
         _segments.addAll(newSegments);
         notifyListeners();
       }
-      
+
       // Auto-paste new transcript text if we received new segments
       if (newSegments.isNotEmpty) {
         _autoPasteNewSegments(newSegments);
@@ -161,27 +161,25 @@ class TranscriptManager extends ChangeNotifier {
       print('Error parsing message: $e');
     }
   }
-  
+
   Future<void> _autoPasteNewSegments(List<TranscriptSegment> newSegments) async {
     if (!_autoPaste || newSegments.isEmpty) return;
-    
+
     try {
       // Get text from new segments only
-      final text = newSegments.map((segment) {
-        final speaker = segment.speaker.isNotEmpty ? '[${segment.speaker}]' : '';
-        final timestamp = DateFormat('HH:mm:ss').format(segment.timestamp);
-        return '$speaker ($timestamp): ${segment.text}';
-      }).join(' '); // Add space between segments
-      
+      final text = '${newSegments.map((segment) {
+            return segment.text;
+          }).join(' ')} '; // Spacing at the end
+
       // Copy to clipboard
       await Clipboard.setData(ClipboardData(text: text));
-      
-      // Simulate Cmd+V keystroke
+
+      // Simulate Cmd+V keystrokeI think yes. Right?
       await keyPressSimulator.simulateKeyDown(
         PhysicalKeyboardKey.keyV,
         [ModifierKey.metaModifier],
       );
-      
+
       await keyPressSimulator.simulateKeyUp(
         PhysicalKeyboardKey.keyV,
         [ModifierKey.metaModifier],
