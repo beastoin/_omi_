@@ -93,6 +93,12 @@ The app expects to connect to a WebSocket server that sends transcript data in t
 - **Connection Issues**: Ensure the WebSocket server is running and accessible. Check the server URL in the settings.
 - **Paste Functionality**: The paste functionality requires macOS permissions for accessibility. Go to System Preferences > Security & Privacy > Privacy > Accessibility and add the app to the list of allowed applications.
 
+
+## Screenshots
+
+<img width="1438" alt="Screenshot 2025-03-12 at 12 05 17" src="https://github.com/user-attachments/assets/755d3ce2-60dc-4fff-b087-78455476a7ec" />
+
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
