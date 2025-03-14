@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/transcript_manager.dart';
 import '../theme/nintendo_theme.dart';
+import 'keywords_screen.dart';
+import 'tools_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -12,18 +14,23 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _serverUrlController;
+  late TextEditingController _uidController;
   bool _autoReconnect = true;
+  bool _keywordDetection = true;
 
   @override
   void initState() {
     super.initState();
     final manager = Provider.of<TranscriptManager>(context, listen: false);
     _serverUrlController = TextEditingController(text: manager.serverUrl);
+    _uidController = TextEditingController(text: manager.uid);
+    _keywordDetection = manager.keywordDetection;
   }
 
   @override
   void dispose() {
     _serverUrlController.dispose();
+    _uidController.dispose();
     super.dispose();
   }
 
@@ -133,6 +140,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _uidController,
+                          decoration: InputDecoration(
+                            labelText: 'User ID',
+                            hintText: 'Enter your user ID',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.neonBlue,
+                                width: 2,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.neonBlue.withOpacity(0.5),
+                                width: 2,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.neonBlue,
+                                width: 2,
+                              ),
+                            ),
+                            prefixIcon: Icon(
+                              Icons.person,
+                              color: NintendoTheme.neonBlue,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -196,6 +236,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             });
                           },
                         ),
+                        const Divider(height: 1, thickness: 1),
+                        SwitchListTile(
+                          title: const Text(
+                            'Keyword Detection',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: const Text(
+                            'Show notification when keywords are detected',
+                          ),
+                          value: _keywordDetection,
+                          activeColor: NintendoTheme.neonRed,
+                          onChanged: (value) {
+                            setState(() {
+                              _keywordDetection = value;
+                            });
+                          },
+                        ),
+                        const Divider(height: 1, thickness: 1),
+                        ListTile(
+                          title: const Text(
+                            'Manage Keywords',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: const Text(
+                            'Add or remove keyword triggers',
+                          ),
+                          trailing: Icon(
+                            Icons.arrow_forward_ios,
+                            color: NintendoTheme.neonRed,
+                            size: 16,
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const KeywordsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1, thickness: 1),
+                        ListTile(
+                          title: const Text(
+                            'Available Tools',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: const Text(
+                            'View tools that can be triggered by commands',
+                          ),
+                          trailing: Icon(
+                            Icons.arrow_forward_ios,
+                            color: NintendoTheme.neonRed,
+                            size: 16,
+                          ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ToolsScreen(),
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -221,7 +324,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: () async {
                         await manager.saveSettings(
                           serverUrl: _serverUrlController.text,
+                          uid: _uidController.text,
                           autoReconnect: _autoReconnect,
+                          keywordDetection: _keywordDetection,
                         );
                         
                         if (context.mounted) {

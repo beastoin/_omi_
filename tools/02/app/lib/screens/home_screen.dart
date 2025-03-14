@@ -6,6 +6,7 @@ import '../models/transcript_manager.dart';
 import '../theme/nintendo_theme.dart';
 import '../widgets/connection_status_widget.dart';
 import '../widgets/transcript_list.dart';
+import '../widgets/custom_toast.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -63,6 +64,87 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          _buildMainContent(context),
+          
+          // Custom toast for keyword detection
+          Consumer<TranscriptManager>(
+            builder: (context, manager, _) {
+              if (manager.errorMessage.isNotEmpty) {
+                return CustomToast(
+                  message: manager.errorMessage,
+                  onDismiss: () {
+                    // Clear the error message
+                    manager.saveSettings(keywords: manager.keywords);
+                  },
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+          
+          // Recording indicator
+          Consumer<TranscriptManager>(
+            builder: (context, manager, _) {
+              if (manager.isRecordingCommand) {
+                return Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: NintendoTheme.neonRed,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.white.withOpacity(0.5),
+                                blurRadius: 5,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'RECORDING',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildMainContent(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -198,7 +280,27 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      onPressed: () => _copyToClipboard(context),
+                      onPressed: () {
+                        final manager = Provider.of<TranscriptManager>(context, listen: false);
+                        final text = manager.getTranscriptText();
+                        
+                        // If there's no text to copy, return early
+                        if (text.isEmpty) return;
+                        
+                        Clipboard.setData(ClipboardData(text: text)).then((_) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('Transcript copied to clipboard!'),
+                              duration: const Duration(seconds: 2),
+                              backgroundColor: NintendoTheme.neonBlue,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                          );
+                        });
+                      },
                     ),
                   ),
                   const SizedBox(width: 12),
