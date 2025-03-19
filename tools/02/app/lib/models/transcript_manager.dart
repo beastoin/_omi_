@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'transcript_segment.dart';
+import 'command_response.dart';
 import '../tools/tool_manager.dart';
 import '../services/llm_service.dart';
 import '../services/tray_service.dart';
@@ -376,54 +377,62 @@ class TranscriptManager extends ChangeNotifier {
 
     try {
       // Process the command using the tool manager
-      final result = await _toolManager.processCommand(command);
+      final response = await _toolManager.processCommand(command);
 
-      // Handle special commands
-      if (result.startsWith("AUTO_PASTE_TOGGLE:")) {
-        final action = result.split(":")[1];
-        bool newState;
-
-        if (action == "ON") {
-          newState = true;
-        } else if (action == "OFF") {
-          newState = false;
-        } else {
-          // TOGGLE
-          newState = !_autoPaste;
-        }
-
-        // Update auto-paste setting
-        await saveSettings(autoPaste: newState);
-
-        // Show notification in system tray
+      if (!response.success) {
+        // Handle error
         TrayService().showNotification(
-          "Auto-Paste Setting", 
-          newState ? "Auto-paste has been turned ON" : "Auto-paste has been turned OFF"
+          "Command Error", 
+          response.errorMessage ?? "Unknown error"
         );
-      } else if (result.startsWith("GRAMMAR_CORRECTION:")) {
-        // Handle grammar correction
-        final text = result.substring("GRAMMAR_CORRECTION:".length);
-        await _correctGrammar(text);
-      } else if (result.startsWith("WRITING_ENHANCEMENT:")) {
-        // Handle writing enhancement
-        final parts = result.substring("WRITING_ENHANCEMENT:".length).split(":");
-        if (parts.length >= 2) {
-          // Decode the text which may have been URL-encoded to preserve colons
-          final text = Uri.decodeComponent(parts[0]);
-          final style = parts[1];
-          await _enhanceWriting(text, style);
-        } else {
+        notifyListeners();
+        return;
+      }
+
+      // Handle different response types
+      switch (response.type) {
+        case CommandResponseType.autoPasteToggle:
+          final action = response.content;
+          bool newState;
+
+          if (action == "ON") {
+            newState = true;
+          } else if (action == "OFF") {
+            newState = false;
+          } else {
+            // TOGGLE
+            newState = !_autoPaste;
+          }
+
+          // Update auto-paste setting
+          await saveSettings(autoPaste: newState);
+
+          // Show notification in system tray
           TrayService().showNotification(
-            "Writing Enhancement Error", 
-            "Invalid format for writing enhancement"
+            "Auto-Paste Setting", 
+            newState ? "Auto-paste has been turned ON" : "Auto-paste has been turned OFF"
           );
-        }
-      } else {
-        // Show notification in system tray with the result
-        TrayService().showNotification(
-          "Command Result", 
-          result
-        );
+          break;
+
+        case CommandResponseType.grammarCorrection:
+          // Handle grammar correction
+          await _correctGrammar(response.content);
+          break;
+
+        case CommandResponseType.writingEnhancement:
+          // Handle writing enhancement
+          final style = response.parameters['style'] ?? 'professional';
+          await _enhanceWriting(response.content, style);
+          break;
+
+        case CommandResponseType.text:
+        default:
+          // Show notification in system tray with the result
+          TrayService().showNotification(
+            "Command Result", 
+            response.content
+          );
+          break;
       }
 
       notifyListeners();

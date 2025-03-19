@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:keypress_simulator/keypress_simulator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../models/command_response.dart';
 
 /// Defines the structure for a tool that can be used by the command processor
 class Tool {
@@ -17,6 +18,12 @@ class Tool {
     required this.triggers,
     required this.execute,
   });
+  
+  /// Execute the tool and return a CommandResponse
+  Future<CommandResponse> executeWithResponse(String command) async {
+    final result = await execute(command);
+    return CommandResponse.fromTransmissionString(result);
+  }
 }
 
 /// Manages the available tools and processes commands to execute the appropriate tool
@@ -29,7 +36,7 @@ class ToolManager {
   }
   
   /// Process a command and execute the appropriate tool
-  Future<String> processCommand(String command) async {
+  Future<CommandResponse> processCommand(String command) async {
     final lowerCommand = command.toLowerCase();
     
     // Find a tool that matches the command
@@ -39,27 +46,17 @@ class ToolManager {
           try {
             final result = await tool.execute(command);
             
-            // For writing enhancement, ensure the format is correct
-            if (result.startsWith("WRITING_ENHANCEMENT:")) {
-              final parts = result.split(":");
-              if (parts.length < 3) {
-                // If missing style, add a default professional style
-                if (parts.length == 2) {
-                  return "${parts[0]}:${parts[1]}:professional";
-                }
-              }
-            }
-            
-            return result;
+            // Convert the string result to a CommandResponse object
+            return CommandResponse.fromTransmissionString(result);
           } catch (e) {
-            return "Error executing ${tool.name}: $e";
+            return CommandResponse.error("Error executing ${tool.name}: $e");
           }
         }
       }
     }
     
     // No matching tool found
-    return "No tool found to handle this command";
+    return CommandResponse.text("No tool found to handle this command");
   }
   
   /// Get all registered tools
