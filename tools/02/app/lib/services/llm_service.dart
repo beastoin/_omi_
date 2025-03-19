@@ -64,6 +64,55 @@ Do not add any quotation marks or formatting to the output.
     }
   }
 
+  /// Enhances writing according to a specified style
+  Future<String> enhanceWriting(String text, String style) async {
+    try {
+      final prompt = '''
+Please enhance the following text in a $style style. 
+Maintain the original meaning but improve the writing according to the specified style:
+
+"$text"
+
+Return only the enhanced text, with no additional explanations, comments, or ellipses (...).
+Do not add any quotation marks or formatting to the output.
+''';
+
+      // Make API request to LLM
+      final response = await http.post(
+        Uri.parse(_apiEndpoint),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_apiKey',
+        },
+        body: jsonEncode({
+          'model': _model,
+          'messages': [
+            {
+              'role': 'system',
+              'content': 'You are a helpful assistant that enhances writing according to specified styles.'
+            },
+            {
+              'role': 'user',
+              'content': prompt
+            }
+          ],
+          'temperature': 0.7,
+          'max_tokens': 1000,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final enhancedText = data['choices'][0]['message']['content'].toString().trim();
+        return enhancedText;
+      } else {
+        throw Exception('Failed to get response from LLM: ${response.statusCode} ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error enhancing writing: $e');
+    }
+  }
+
   /// Selects the most appropriate tool based on the command
   Future<String> selectTool(String command, List<Tool> tools) async {
     try {

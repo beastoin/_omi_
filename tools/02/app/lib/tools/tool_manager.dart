@@ -198,6 +198,63 @@ class PredefinedTools {
     );
   }
   
+  /// Creates a tool for enhancing writing with different styles
+  static Tool writingEnhancementTool() {
+    return Tool(
+      name: "Writing Enhancement",
+      description: "Enhances selected text according to a specified style",
+      triggers: ["enhance my writing", "enhance writing", "improve writing", "rewrite", "make it more"],
+      execute: (command) async {
+        try {
+          // First, simulate Cmd+C to copy the selected text
+          await keyPressSimulator.simulateKeyDown(
+            PhysicalKeyboardKey.keyC,
+            [ModifierKey.metaModifier],
+          );
+
+          await keyPressSimulator.simulateKeyUp(
+            PhysicalKeyboardKey.keyC,
+            [ModifierKey.metaModifier],
+          );
+          
+          // Small delay to ensure the clipboard has been updated
+          await Future.delayed(const Duration(milliseconds: 100));
+          
+          // Now get text from clipboard
+          final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+          final text = clipboardData?.text;
+          
+          if (text == null || text.isEmpty) {
+            return "No text selected to enhance. Please select text first.";
+          }
+          
+          // Extract the style from the command
+          String style = "professional";  // Default style
+          
+          // Look for style after the trigger words
+          final lowerCommand = command.toLowerCase();
+          for (final trigger in ["enhance my writing", "enhance writing", "improve writing", "rewrite", "make it more"]) {
+            if (lowerCommand.contains(trigger)) {
+              final index = lowerCommand.indexOf(trigger) + trigger.length;
+              if (index < lowerCommand.length) {
+                final remainingText = lowerCommand.substring(index).trim();
+                if (remainingText.isNotEmpty) {
+                  style = remainingText;
+                }
+              }
+              break;
+            }
+          }
+          
+          // This will be implemented in the TranscriptManager
+          return "WRITING_ENHANCEMENT:$text:$style";
+        } catch (e) {
+          return "Failed to enhance writing: $e";
+        }
+      },
+    );
+  }
+
   /// Creates a tool for grammar correction
   static Tool grammarCorrectionTool() {
     return Tool(
@@ -271,5 +328,6 @@ class PredefinedTools {
     manager.registerTool(telegramTool());
     manager.registerTool(autoPasteToggleTool());
     manager.registerTool(grammarCorrectionTool());
+    manager.registerTool(writingEnhancementTool());
   }
 }
