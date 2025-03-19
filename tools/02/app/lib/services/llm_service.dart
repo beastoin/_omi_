@@ -15,21 +15,17 @@ class LlmService {
         _apiEndpoint = apiEndpoint,
         _model = model;
 
-  /// Selects the most appropriate tool based on the command
-  Future<String> selectTool(String command, List<Tool> tools) async {
+  /// Corrects grammar in the provided text
+  Future<String> correctGrammar(String text) async {
     try {
-      // Create a prompt that describes the task and lists available tools
-      final toolDescriptions = tools.map((tool) => 
-        "- ${tool.name}: ${tool.description}"
-      ).join('\n');
-      
       final prompt = '''
-I need to select the most appropriate tool to handle this user command: "$command"
+Please correct the grammar, spelling, and punctuation in the following text. 
+Maintain the original meaning and style, but fix any errors:
 
-Available tools:
-$toolDescriptions
+"$text"
 
-Return ONLY the name of the single most appropriate tool. Just the tool name, nothing else.
+Return only the corrected text, with no additional explanations, comments, or ellipses (...).
+Do not add any quotation marks or formatting to the output.
 ''';
 
       // Make API request to LLM
@@ -44,7 +40,7 @@ Return ONLY the name of the single most appropriate tool. Just the tool name, no
           'messages': [
             {
               'role': 'system',
-              'content': 'You are a helpful assistant that selects the most appropriate tool based on a user command.'
+              'content': 'You are a helpful assistant that corrects grammar, spelling, and punctuation.'
             },
             {
               'role': 'user',
@@ -52,38 +48,21 @@ Return ONLY the name of the single most appropriate tool. Just the tool name, no
             }
           ],
           'temperature': 0.3,
-          'max_tokens': 50,
+          'max_tokens': 1000,
         }),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final toolName = data['choices'][0]['message']['content'].toString().trim();
-        return toolName;
+        final correctedText = data['choices'][0]['message']['content'].toString().trim();
+        return correctedText;
       } else {
         throw Exception('Failed to get response from LLM: ${response.statusCode} ${response.body}');
       }
     } catch (e) {
-      throw Exception('Error selecting tool: $e');
+      throw Exception('Error correcting grammar: $e');
     }
   }
-}
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../tools/tool_manager.dart';
-
-class LlmService {
-  final String _apiKey;
-  final String _apiEndpoint;
-  final String _model;
-
-  LlmService({
-    required String apiKey,
-    String apiEndpoint = 'https://api.openai.com/v1/chat/completions',
-    String model = 'gpt-3.5-turbo',
-  })  : _apiKey = apiKey,
-        _apiEndpoint = apiEndpoint,
-        _model = model;
 
   /// Selects the most appropriate tool based on the command
   Future<String> selectTool(String command, List<Tool> tools) async {

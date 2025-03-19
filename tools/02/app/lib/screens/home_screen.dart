@@ -69,22 +69,6 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _buildMainContent(context),
           
-          // Custom toast for keyword detection
-          Consumer<TranscriptManager>(
-            builder: (context, manager, _) {
-              if (manager.errorMessage.isNotEmpty) {
-                return CustomToast(
-                  message: manager.errorMessage,
-                  onDismiss: () {
-                    // Clear the error message
-                    manager.saveSettings(keywords: manager.keywords);
-                  },
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          
           // Recording indicator
           Consumer<TranscriptManager>(
             builder: (context, manager, _) {

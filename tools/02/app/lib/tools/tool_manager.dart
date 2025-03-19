@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:keypress_simulator/keypress_simulator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Defines the structure for a tool that can be used by the command processor
@@ -196,6 +198,45 @@ class PredefinedTools {
     );
   }
   
+  /// Creates a tool for grammar correction
+  static Tool grammarCorrectionTool() {
+    return Tool(
+      name: "Grammar Correction",
+      description: "Corrects grammar, spelling, and punctuation in selected text",
+      triggers: ["correct me", "fix grammar", "grammar check", "correct grammar", "fix my text"],
+      execute: (command) async {
+        try {
+          // First, simulate Cmd+C to copy the selected text
+          await keyPressSimulator.simulateKeyDown(
+            PhysicalKeyboardKey.keyC,
+            [ModifierKey.metaModifier],
+          );
+
+          await keyPressSimulator.simulateKeyUp(
+            PhysicalKeyboardKey.keyC,
+            [ModifierKey.metaModifier],
+          );
+          
+          // Small delay to ensure the clipboard has been updated
+          await Future.delayed(const Duration(milliseconds: 100));
+          
+          // Now get text from clipboard
+          final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+          final text = clipboardData?.text;
+          
+          if (text == null || text.isEmpty) {
+            return "No text selected to correct. Please select text first.";
+          }
+          
+          // This will be implemented in the TranscriptManager
+          return "GRAMMAR_CORRECTION:$text";
+        } catch (e) {
+          return "Failed to correct grammar: $e";
+        }
+      },
+    );
+  }
+
   /// Creates a tool for toggling auto-paste feature
   static Tool autoPasteToggleTool() {
     return Tool(
@@ -229,5 +270,6 @@ class PredefinedTools {
     manager.registerTool(appTool());
     manager.registerTool(telegramTool());
     manager.registerTool(autoPasteToggleTool());
+    manager.registerTool(grammarCorrectionTool());
   }
 }

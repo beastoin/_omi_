@@ -12,6 +12,8 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'transcript_segment.dart';
 import '../tools/tool_manager.dart';
+import '../services/llm_service.dart';
+import '../services/tray_service.dart';
 
 enum ConnectionStatus {
   disconnected,
@@ -32,14 +34,19 @@ class TranscriptManager extends ChangeNotifier {
   bool _autoPaste = true;
   bool _keywordDetection = true;
   List<String> _keywords = ['112', 'one one two'];
-  
+
   // Command recording variables
   bool _isRecordingCommand = false;
   String _currentCommand = "";
   DateTime? _commandStartTime;
-  
+
   // Tool manager for processing commands
   final ToolManager _toolManager = ToolManager();
+
+  // LLM service for grammar correction
+  LlmService? _llmService;
+  String _apiKey = '';
+  bool get hasApiKey => _apiKey.isNotEmpty;
 
   List<TranscriptSegment> get segments => _segments;
   ConnectionStatus get status => _status;
@@ -57,7 +64,7 @@ class TranscriptManager extends ChangeNotifier {
     _loadSettings();
     _initializeTools();
   }
-  
+
   void _initializeTools() {
     // Register all predefined tools
     PredefinedTools.registerAll(_toolManager);
@@ -70,7 +77,13 @@ class TranscriptManager extends ChangeNotifier {
     _autoReconnect = prefs.getBool('auto_reconnect') ?? _autoReconnect;
     _autoPaste = prefs.getBool('auto_paste') ?? _autoPaste;
     _keywordDetection = prefs.getBool('keyword_detection') ?? _keywordDetection;
-    
+    _apiKey = prefs.getString('api_key') ?? '';
+
+    // Initialize LLM service if API key is available
+    if (_apiKey.isNotEmpty) {
+      _llmService = LlmService(apiKey: _apiKey);
+    }
+
     // Load keywords from preferences
     final keywordsJson = prefs.getStringList('keywords');
     if (keywordsJson != null && keywordsJson.isNotEmpty) {
@@ -86,6 +99,7 @@ class TranscriptManager extends ChangeNotifier {
     bool? autoPaste,
     bool? keywordDetection,
     List<String>? keywords,
+    String? apiKey,
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -113,10 +127,22 @@ class TranscriptManager extends ChangeNotifier {
       _keywordDetection = keywordDetection;
       await prefs.setBool('keyword_detection', keywordDetection);
     }
-    
+
     if (keywords != null) {
       _keywords = keywords;
       await prefs.setStringList('keywords', keywords);
+    }
+
+    if (apiKey != null) {
+      _apiKey = apiKey;
+      await prefs.setString('api_key', apiKey);
+
+      // Initialize or update LLM service
+      if (apiKey.isNotEmpty) {
+        _llmService = LlmService(apiKey: apiKey);
+      } else {
+        _llmService = null;
+      }
     }
 
     notifyListeners();
@@ -202,10 +228,11 @@ class TranscriptManager extends ChangeNotifier {
         notifyListeners();
       }
 
-      // Auto-paste new transcript text if we received new segments
+      // First check for keywords, then auto-paste if appropriate
       if (newSegments.isNotEmpty) {
-        _autoPasteNewSegments(newSegments);
-        _checkForKeyword(newSegments);
+        if (!_checkForKeyword(newSegments)) {
+          _autoPasteNewSegments(newSegments);
+        }
       }
     } catch (e) {
       print('Error parsing message: $e');
@@ -224,7 +251,7 @@ class TranscriptManager extends ChangeNotifier {
       // Copy to clipboard
       await Clipboard.setData(ClipboardData(text: text));
 
-      // Simulate Cmd+V keystrokeI think yes. Right?
+      // Simulate Cmd+V keystroke
       await keyPressSimulator.simulateKeyDown(
         PhysicalKeyboardKey.keyV,
         [ModifierKey.metaModifier],
@@ -252,57 +279,59 @@ class TranscriptManager extends ChangeNotifier {
     }).join('\n\n');
   }
 
-  void _checkForKeyword(List<TranscriptSegment> segments) {
-    if (!_keywordDetection) return;
+  bool _checkForKeyword(List<TranscriptSegment> segments) {
+    if (!_keywordDetection) return false;
 
     // Combine all new segment texts to check for the keywords
     final String combinedText = segments.map((s) => s.text.toLowerCase()).join(' ');
-    
+
     // Check if we're already recording a command
     if (_isRecordingCommand) {
       // Add the new text to the current command
       _currentCommand += " $combinedText";
-      
+
       // Check if the "over" keyword is present to end the command
       if (combinedText.contains('over')) {
         // Finalize the command
         final endIndex = _currentCommand.lastIndexOf('over');
         final finalCommand = _currentCommand.substring(0, endIndex).trim();
-        
+
         // Calculate duration
         final duration = DateTime.now().difference(_commandStartTime!);
-        
+
         // Process the command
         _processCommand(finalCommand);
-        
-        // Show the completed command notification
-        _errorMessage = "Command recorded: $finalCommand (${duration.inSeconds}s)";
-        notifyListeners();
-        
+
+        // Show notification in system tray
+        TrayService().showNotification(
+          "Command Completed", 
+          "Command recorded: $finalCommand (${duration.inSeconds}s)"
+        );
+
         // Reset command recording state
         _isRecordingCommand = false;
         _currentCommand = "";
         _commandStartTime = null;
         
-        // Reset error message after a delay
-        Timer(const Duration(seconds: 3), () {
-          _errorMessage = "";
-          notifyListeners();
-        });
+        // Reset the recording icon state
+        TrayService().setRecordingIcon(false);
+        
+        // Still notify listeners to update UI
+        notifyListeners();
       }
-      return;
+      return true;
     }
-    
+
     // Not recording yet, check for trigger keywords
-    if (_keywords.isEmpty) return;
-    
+    if (_keywords.isEmpty) return false;
+
     // Check for any of the keywords in the list
     for (final keyword in _keywords) {
       if (combinedText.toLowerCase().contains(keyword.toLowerCase())) {
         // Start recording the command but exclude the trigger keyword
         _isRecordingCommand = true;
         _commandStartTime = DateTime.now();
-        
+
         // Remove the trigger keyword from the initial command text
         String initialCommand = combinedText;
         // Find the end of the keyword in the text
@@ -313,73 +342,148 @@ class TranscriptManager extends ChangeNotifier {
         } else {
           initialCommand = "";
         }
-        
+
         _currentCommand = initialCommand;
+
+        // Show notification in system tray with more noticeable message
+        TrayService().showNotification(
+          "Command Recording Started", 
+          "Recording command... Say 'over' when finished."
+        );
         
-        // Notify listeners to show a toast notification
-        _errorMessage = "I am here - Recording command...";
+        // Explicitly set the recording icon state
+        TrayService().setRecordingIcon(true);
+
+        // Still notify listeners to update UI
         notifyListeners();
-        
+
         // Break after first match to avoid multiple recordings
         break;
       }
     }
+
+    return _isRecordingCommand;
   }
 
   Future<void> _processCommand(String command) async {
-    _errorMessage = "Processing command...";
-    notifyListeners();
+    // Show notification in system tray
+    TrayService().showNotification(
+      "Command Processing", 
+      "Processing command..."
+    );
     
+    notifyListeners();
+
     try {
       // Process the command using the tool manager
       final result = await _toolManager.processCommand(command);
-      
+
       // Handle special commands
       if (result.startsWith("AUTO_PASTE_TOGGLE:")) {
         final action = result.split(":")[1];
         bool newState;
-        
+
         if (action == "ON") {
           newState = true;
         } else if (action == "OFF") {
           newState = false;
-        } else { // TOGGLE
+        } else {
+          // TOGGLE
           newState = !_autoPaste;
         }
-        
+
         // Update auto-paste setting
         await saveSettings(autoPaste: newState);
-        
-        _errorMessage = newState 
-            ? "Auto-paste has been turned ON" 
-            : "Auto-paste has been turned OFF";
+
+        // Show notification in system tray
+        TrayService().showNotification(
+          "Auto-Paste Setting", 
+          newState ? "Auto-paste has been turned ON" : "Auto-paste has been turned OFF"
+        );
+      } else if (result.startsWith("GRAMMAR_CORRECTION:")) {
+        // Handle grammar correction
+        final text = result.substring("GRAMMAR_CORRECTION:".length);
+        await _correctGrammar(text);
       } else {
-        // Update the error message with the result
-        _errorMessage = result;
+        // Show notification in system tray with the result
+        TrayService().showNotification(
+          "Command Result", 
+          result
+        );
       }
-      
+
       notifyListeners();
-      
-      // Reset error message after a delay
-      Timer(const Duration(seconds: 3), () {
-        _errorMessage = "";
-        notifyListeners();
-      });
     } catch (e) {
-      _errorMessage = "Error processing command: $e";
-      notifyListeners();
+      // Show error notification in system tray
+      TrayService().showNotification(
+        "Command Error", 
+        "Error processing command: $e"
+      );
       
-      // Reset error message after a delay
-      Timer(const Duration(seconds: 3), () {
-        _errorMessage = "";
-        notifyListeners();
-      });
+      notifyListeners();
     }
   }
-  
+
   /// Get all available tools
   List<Tool> get availableTools => _toolManager.tools;
-  
+
+  /// Corrects grammar in the provided text and pastes the result
+  Future<void> _correctGrammar(String text) async {
+    if (_llmService == null) {
+      // Show notification in system tray
+      TrayService().showNotification(
+        "Grammar Correction Error", 
+        "API key not set. Please set an OpenAI API key in settings."
+      );
+      
+      notifyListeners();
+      return;
+    }
+
+    try {
+      // Show notification in system tray
+      TrayService().showNotification(
+        "Grammar Correction", 
+        "Correcting grammar..."
+      );
+      
+      notifyListeners();
+
+      // Get corrected text from LLM
+      final correctedText = await _llmService!.correctGrammar(text);
+
+      // Copy to clipboard
+      await Clipboard.setData(ClipboardData(text: correctedText));
+
+      // Simulate Cmd+V keystroke to paste
+      await keyPressSimulator.simulateKeyDown(
+        PhysicalKeyboardKey.keyV,
+        [ModifierKey.metaModifier],
+      );
+
+      await keyPressSimulator.simulateKeyUp(
+        PhysicalKeyboardKey.keyV,
+        [ModifierKey.metaModifier],
+      );
+
+      // Show notification in system tray
+      TrayService().showNotification(
+        "Grammar Correction", 
+        "Grammar corrected and pasted"
+      );
+      
+      notifyListeners();
+    } catch (e) {
+      // Show notification in system tray
+      TrayService().showNotification(
+        "Grammar Correction Error", 
+        "Error correcting grammar: $e"
+      );
+      
+      notifyListeners();
+    }
+  }
+
   /// Register a new tool
   void registerTool(Tool tool) {
     _toolManager.registerTool(tool);

@@ -15,6 +15,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _serverUrlController;
   late TextEditingController _uidController;
+  late TextEditingController _apiKeyController;
   bool _autoReconnect = true;
   bool _keywordDetection = true;
 
@@ -24,6 +25,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final manager = Provider.of<TranscriptManager>(context, listen: false);
     _serverUrlController = TextEditingController(text: manager.serverUrl);
     _uidController = TextEditingController(text: manager.uid);
+    _apiKeyController = TextEditingController();
     _keywordDetection = manager.keywordDetection;
   }
 
@@ -31,6 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _serverUrlController.dispose();
     _uidController.dispose();
+    _apiKeyController.dispose();
     super.dispose();
   }
 
@@ -171,6 +174,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Icons.person,
                               color: NintendoTheme.neonBlue,
                             ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // API Key section
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? NintendoTheme.nintendoDarkGray.withOpacity(0.7)
+                          : Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: NintendoTheme.luigiGreen.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: NintendoTheme.luigiGreen,
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.api,
+                              color: NintendoTheme.luigiGreen,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'API Settings',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: NintendoTheme.luigiGreen,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _apiKeyController,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: 'OpenAI API Key',
+                            hintText: 'Enter your OpenAI API key for grammar correction',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.luigiGreen,
+                                width: 2,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.luigiGreen.withOpacity(0.5),
+                                width: 2,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.luigiGreen,
+                                width: 2,
+                              ),
+                            ),
+                            prefixIcon: Icon(
+                              Icons.vpn_key,
+                              color: NintendoTheme.luigiGreen,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Required for grammar correction tool. Your API key is stored locally and never shared.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey[400]
+                                : Colors.grey[600],
                           ),
                         ),
                       ],
@@ -327,6 +420,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           uid: _uidController.text,
                           autoReconnect: _autoReconnect,
                           keywordDetection: _keywordDetection,
+                          apiKey: _apiKeyController.text,
                         );
                         
                         if (context.mounted) {
