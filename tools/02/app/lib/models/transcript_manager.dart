@@ -404,6 +404,19 @@ class TranscriptManager extends ChangeNotifier {
         // Handle grammar correction
         final text = result.substring("GRAMMAR_CORRECTION:".length);
         await _correctGrammar(text);
+      } else if (result.startsWith("WRITING_ENHANCEMENT:")) {
+        // Handle writing enhancement
+        final parts = result.substring("WRITING_ENHANCEMENT:".length).split(":");
+        if (parts.length >= 2) {
+          final text = parts[0];
+          final style = parts[1];
+          await _enhanceWriting(text, style);
+        } else {
+          TrayService().showNotification(
+            "Writing Enhancement Error", 
+            "Invalid format for writing enhancement"
+          );
+        }
       } else {
         // Show notification in system tray with the result
         TrayService().showNotification(
@@ -478,6 +491,63 @@ class TranscriptManager extends ChangeNotifier {
       TrayService().showNotification(
         "Grammar Correction Error", 
         "Error correcting grammar: $e"
+      );
+      
+      notifyListeners();
+    }
+  }
+
+  /// Enhances writing according to a specified style and pastes the result
+  Future<void> _enhanceWriting(String text, String style) async {
+    if (_llmService == null) {
+      // Show notification in system tray
+      TrayService().showNotification(
+        "Writing Enhancement Error", 
+        "API key not set. Please set an OpenAI API key in settings."
+      );
+      
+      notifyListeners();
+      return;
+    }
+
+    try {
+      // Show notification in system tray
+      TrayService().showNotification(
+        "Writing Enhancement", 
+        "Enhancing writing in $style style..."
+      );
+      
+      notifyListeners();
+
+      // Get enhanced text from LLM
+      final enhancedText = await _llmService!.enhanceWriting(text, style);
+
+      // Copy to clipboard
+      await Clipboard.setData(ClipboardData(text: enhancedText));
+
+      // Simulate Cmd+V keystroke to paste
+      await keyPressSimulator.simulateKeyDown(
+        PhysicalKeyboardKey.keyV,
+        [ModifierKey.metaModifier],
+      );
+
+      await keyPressSimulator.simulateKeyUp(
+        PhysicalKeyboardKey.keyV,
+        [ModifierKey.metaModifier],
+      );
+
+      // Show notification in system tray
+      TrayService().showNotification(
+        "Writing Enhancement", 
+        "Writing enhanced in $style style and pasted"
+      );
+      
+      notifyListeners();
+    } catch (e) {
+      // Show notification in system tray
+      TrayService().showNotification(
+        "Writing Enhancement Error", 
+        "Error enhancing writing: $e"
       );
       
       notifyListeners();
