@@ -238,10 +238,10 @@ class PredefinedTools {
             return "No text selected to enhance. Please select text first.";
           }
           
-          // Extract the style from the command
-          String style = "professional";  // Default style
+          // Extract the instruction from the command
+          String instruction = "professional";  // Default instruction
           
-          // Look for style after the trigger words
+          // Look for instruction after the trigger words
           final lowerCommand = command.toLowerCase();
           for (final trigger in ["enhance my writing", "enhance writing", "improve writing", "rewrite", "make it more"]) {
             if (lowerCommand.contains(trigger)) {
@@ -249,7 +249,7 @@ class PredefinedTools {
               if (index < lowerCommand.length) {
                 final remainingText = lowerCommand.substring(index).trim();
                 if (remainingText.isNotEmpty) {
-                  style = remainingText;
+                  instruction = remainingText;
                 }
               }
               break;
@@ -260,7 +260,7 @@ class PredefinedTools {
           // Ensure we're using a format that won't break when splitting by colon
           // by encoding the text if it might contain colons
           final encodedText = Uri.encodeComponent(text);
-          return "WRITING_ENHANCEMENT:$encodedText:$style";
+          return "WRITING_ENHANCEMENT:$encodedText:$instruction";
         } catch (e) {
           return "Failed to enhance writing: $e";
         }

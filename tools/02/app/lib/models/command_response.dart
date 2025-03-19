@@ -52,11 +52,11 @@ class CommandResponse {
   }
 
   /// Creates a writing enhancement response
-  factory CommandResponse.writingEnhancement(String text, String style) {
+  factory CommandResponse.writingEnhancement(String text, String instruction) {
     return CommandResponse(
       type: CommandResponseType.writingEnhancement,
       content: text,
-      parameters: {'style': style},
+      parameters: {'instruction': instruction},
     );
   }
 
@@ -75,8 +75,8 @@ class CommandResponse {
         return "GRAMMAR_CORRECTION:$content";
       case CommandResponseType.writingEnhancement:
         final encodedText = Uri.encodeComponent(content);
-        final style = parameters['style'] ?? 'professional';
-        return "WRITING_ENHANCEMENT:$encodedText:$style";
+        final instruction = parameters['instruction'] ?? 'professional';
+        return "WRITING_ENHANCEMENT:$encodedText:$instruction";
       case CommandResponseType.autoPasteToggle:
         return "AUTO_PASTE_TOGGLE:$content";
       case CommandResponseType.text:
@@ -94,8 +94,8 @@ class CommandResponse {
       final parts = transmissionString.substring("WRITING_ENHANCEMENT:".length).split(":");
       if (parts.length >= 2) {
         final text = Uri.decodeComponent(parts[0]);
-        final style = parts[1];
-        return CommandResponse.writingEnhancement(text, style);
+        final instruction = parts[1];
+        return CommandResponse.writingEnhancement(text, instruction);
       } else {
         return CommandResponse.error("Invalid format for writing enhancement");
       }

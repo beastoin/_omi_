@@ -421,8 +421,8 @@ class TranscriptManager extends ChangeNotifier {
 
         case CommandResponseType.writingEnhancement:
           // Handle writing enhancement
-          final style = response.parameters['style'] ?? 'professional';
-          await _enhanceWriting(response.content, style);
+          final instruction = response.parameters['instruction'] ?? 'professional';
+          await _enhanceWriting(response.content, instruction);
           break;
 
         case CommandResponseType.text:
@@ -507,8 +507,8 @@ class TranscriptManager extends ChangeNotifier {
     }
   }
 
-  /// Enhances writing according to a specified style and pastes the result
-  Future<void> _enhanceWriting(String text, String style) async {
+  /// Enhances writing according to a specified instruction and pastes the result
+  Future<void> _enhanceWriting(String text, String instruction) async {
     if (_llmService == null) {
       // Show notification in system tray
       TrayService().showNotification(
@@ -524,13 +524,13 @@ class TranscriptManager extends ChangeNotifier {
       // Show notification in system tray
       TrayService().showNotification(
         "Writing Enhancement", 
-        "Enhancing writing in $style style..."
+        "Enhancing writing with '$instruction' instruction..."
       );
       
       notifyListeners();
 
       // Get enhanced text from LLM
-      final enhancedText = await _llmService!.enhanceWriting(text, style);
+      final enhancedText = await _llmService!.enhanceWriting(text, instruction);
 
       // Copy to clipboard
       await Clipboard.setData(ClipboardData(text: enhancedText));
@@ -549,7 +549,7 @@ class TranscriptManager extends ChangeNotifier {
       // Show notification in system tray
       TrayService().showNotification(
         "Writing Enhancement", 
-        "Writing enhanced in $style style and pasted"
+        "Writing enhanced with '$instruction' instruction and pasted"
       );
       
       notifyListeners();

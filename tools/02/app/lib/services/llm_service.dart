@@ -64,12 +64,12 @@ Do not add any quotation marks or formatting to the output.
     }
   }
 
-  /// Enhances writing according to a specified style
-  Future<String> enhanceWriting(String text, String style) async {
+  /// Enhances writing according to a specified instruction
+  Future<String> enhanceWriting(String text, String instruction) async {
     try {
       final prompt = '''
-Please enhance the following text in a $style style. 
-Maintain the original meaning but improve the writing according to the specified style:
+Please enhance the following text according to this instruction: $instruction. 
+Maintain the original meaning but improve the writing according to the specified instruction:
 
 "$text"
 
@@ -89,7 +89,7 @@ Do not add any quotation marks or formatting to the output.
           'messages': [
             {
               'role': 'system',
-              'content': 'You are a helpful assistant that enhances writing according to specified styles.'
+              'content': 'You are a helpful assistant that enhances writing according to specified instructions.'
             },
             {
               'role': 'user',
