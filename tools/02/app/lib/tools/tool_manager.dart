@@ -37,7 +37,20 @@ class ToolManager {
       for (final trigger in tool.triggers) {
         if (lowerCommand.contains(trigger.toLowerCase())) {
           try {
-            return await tool.execute(command);
+            final result = await tool.execute(command);
+            
+            // For writing enhancement, ensure the format is correct
+            if (result.startsWith("WRITING_ENHANCEMENT:")) {
+              final parts = result.split(":");
+              if (parts.length < 3) {
+                // If missing style, add a default professional style
+                if (parts.length == 2) {
+                  return "${parts[0]}:${parts[1]}:professional";
+                }
+              }
+            }
+            
+            return result;
           } catch (e) {
             return "Error executing ${tool.name}: $e";
           }
@@ -246,8 +259,11 @@ class PredefinedTools {
             }
           }
           
-          // This will be implemented in the TranscriptManager
-          return "WRITING_ENHANCEMENT:$text:$style";
+          // Format the return value for the TranscriptManager to process
+          // Ensure we're using a format that won't break when splitting by colon
+          // by encoding the text if it might contain colons
+          final encodedText = Uri.encodeComponent(text);
+          return "WRITING_ENHANCEMENT:$encodedText:$style";
         } catch (e) {
           return "Failed to enhance writing: $e";
         }

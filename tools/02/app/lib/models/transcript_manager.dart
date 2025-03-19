@@ -408,7 +408,8 @@ class TranscriptManager extends ChangeNotifier {
         // Handle writing enhancement
         final parts = result.substring("WRITING_ENHANCEMENT:".length).split(":");
         if (parts.length >= 2) {
-          final text = parts[0];
+          // Decode the text which may have been URL-encoded to preserve colons
+          final text = Uri.decodeComponent(parts[0]);
           final style = parts[1];
           await _enhanceWriting(text, style);
         } else {
