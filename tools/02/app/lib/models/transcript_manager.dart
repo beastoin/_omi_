@@ -75,6 +75,7 @@ class TranscriptManager extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _serverUrl = prefs.getString('server_url') ?? _serverUrl;
     _uid = prefs.getString('uid') ?? _uid;
+        debugPrint("load settings ${_uid}");
     _autoReconnect = prefs.getBool('auto_reconnect') ?? _autoReconnect;
     _autoPaste = prefs.getBool('auto_paste') ?? _autoPaste;
     _keywordDetection = prefs.getBool('keyword_detection') ?? _keywordDetection;
@@ -155,6 +156,8 @@ class TranscriptManager extends ChangeNotifier {
     _status = ConnectionStatus.connecting;
     _errorMessage = '';
     notifyListeners();
+
+    debugPrint(_uid);
 
     try {
       final url = '$_serverUrl?uid=$_uid';
