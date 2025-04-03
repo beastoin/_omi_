@@ -366,6 +366,9 @@ class TranscriptManager extends ChangeNotifier {
         _currentCommand = "";
         _commandStartTime = null;
         
+        // Clear recent segments to avoid recalling old commands
+        _recentSegments.clear();
+        
         // Reset the recording icon state
         TrayService().setRecordingIcon(false);
         
@@ -401,6 +404,9 @@ class TranscriptManager extends ChangeNotifier {
         }
 
         _currentCommand = initialCommand;
+        
+        // Clear recent segments to avoid recalling old commands
+        _recentSegments.clear();
 
         // Show notification in system tray with more noticeable message
         TrayService().showNotification(
