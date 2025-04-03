@@ -40,6 +40,18 @@ class TranscriptManager extends ChangeNotifier {
   bool _isRecordingCommand = false;
   String _currentCommand = "";
   DateTime? _commandStartTime;
+  
+  // Pending command that requires settings
+  String? _pendingCommand;
+  String? _pendingSettingsSection;
+  
+  // Navigation and pending command properties
+  bool get hasPendingSettingsNavigation => _pendingSettingsSection != null;
+  String? get pendingSettingsSection {
+    final section = _pendingSettingsSection;
+    _pendingSettingsSection = null; // Clear after reading
+    return section;
+  }
 
   // Tool manager for processing commands
   final ToolManager _toolManager = ToolManager();
@@ -164,6 +176,16 @@ class TranscriptManager extends ChangeNotifier {
       // Initialize or update LLM service
       if (apiKey.isNotEmpty) {
         _llmService = LlmService(apiKey: apiKey);
+        
+        // If there's a pending command that was waiting for API key, execute it
+        if (_pendingCommand != null && 
+            (_pendingCommand!.contains("GRAMMAR_CORRECTION:") || 
+             _pendingCommand!.contains("WRITING_ENHANCEMENT:"))) {
+          // Execute after a short delay to allow UI to update
+          Future.delayed(Duration(milliseconds: 500), () {
+            executePendingCommandIfAvailable();
+          });
+        }
       } else {
         _llmService = null;
       }
@@ -438,6 +460,32 @@ class TranscriptManager extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Check if the command requires settings that aren't set up
+      if (command.toLowerCase().contains("grammar") || 
+          command.toLowerCase().contains("writing") || 
+          command.toLowerCase().contains("enhance") || 
+          command.toLowerCase().contains("rewrite") || 
+          command.toLowerCase().contains("make it more")) {
+        
+        // Check if API key is missing for LLM-based tools
+        if (_apiKey.isEmpty || _llmService == null) {
+          // Show notification about missing settings
+          TrayService().showNotification(
+            "Settings Required", 
+            "This command requires an API key. Opening settings page..."
+          );
+          
+          // Navigate to settings page (this will be handled by listeners)
+          _navigateToSettings("api_key");
+          
+          // Save the command for later execution
+          _pendingCommand = command;
+          
+          notifyListeners();
+          return;
+        }
+      }
+      
       // Process the command using the tool manager
       final response = await _toolManager.processCommand(command);
 
@@ -512,14 +560,46 @@ class TranscriptManager extends ChangeNotifier {
   /// Get all available tools
   List<Tool> get availableTools => _toolManager.tools;
 
+  /// Navigate to settings page
+  void _navigateToSettings(String section) {
+    _pendingSettingsSection = section;
+    // This will be observed by the UI to navigate to settings
+    notifyListeners();
+  }
+  
+  /// Execute pending command after settings are updated
+  Future<void> executePendingCommandIfAvailable() async {
+    if (_pendingCommand != null) {
+      final command = _pendingCommand;
+      _pendingCommand = null;
+      
+      // Show notification
+      TrayService().showNotification(
+        "Resuming Command", 
+        "Settings updated. Resuming command execution..."
+      );
+      
+      // Process the command
+      if (command != null) {
+        await _processCommand(command);
+      }
+    }
+  }
+
   /// Corrects grammar in the provided text and pastes the result
   Future<void> _correctGrammar(String text) async {
     if (_llmService == null) {
       // Show notification in system tray
       TrayService().showNotification(
-        "Grammar Correction Error", 
-        "API key not set. Please set an OpenAI API key in settings."
+        "Settings Required", 
+        "API key not set. Opening settings page..."
       );
+      
+      // Save the current operation for later
+      _pendingCommand = "GRAMMAR_CORRECTION:$text";
+      
+      // Navigate to settings
+      _navigateToSettings("api_key");
       
       notifyListeners();
       return;
@@ -574,9 +654,16 @@ class TranscriptManager extends ChangeNotifier {
     if (_llmService == null) {
       // Show notification in system tray
       TrayService().showNotification(
-        "Writing Enhancement Error", 
-        "API key not set. Please set an OpenAI API key in settings."
+        "Settings Required", 
+        "API key not set. Opening settings page..."
       );
+      
+      // Save the current operation for later
+      final encodedText = Uri.encodeComponent(text);
+      _pendingCommand = "WRITING_ENHANCEMENT:$encodedText:$instruction";
+      
+      // Navigate to settings
+      _navigateToSettings("api_key");
       
       notifyListeners();
       return;
