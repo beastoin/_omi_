@@ -241,18 +241,24 @@ class PredefinedTools {
           // Extract the instruction from the command
           String instruction = "professional";  // Default instruction
           
-          // Look for instruction after the trigger words
+          // Special handling for "make it more" to capture the full user request
           final lowerCommand = command.toLowerCase();
-          for (final trigger in ["enhance my writing", "enhance writing", "improve writing", "rewrite", "make it more"]) {
-            if (lowerCommand.contains(trigger)) {
-              final index = lowerCommand.indexOf(trigger) + trigger.length;
-              if (index < lowerCommand.length) {
-                final remainingText = lowerCommand.substring(index).trim();
-                if (remainingText.isNotEmpty) {
-                  instruction = remainingText;
+          if (lowerCommand.contains("make it more")) {
+            // For "make it more", use the entire command as the instruction
+            instruction = command;
+          } else {
+            // For other triggers, extract instruction after the trigger words
+            for (final trigger in ["enhance my writing", "enhance writing", "improve writing", "rewrite"]) {
+              if (lowerCommand.contains(trigger)) {
+                final index = lowerCommand.indexOf(trigger) + trigger.length;
+                if (index < lowerCommand.length) {
+                  final remainingText = lowerCommand.substring(index).trim();
+                  if (remainingText.isNotEmpty) {
+                    instruction = remainingText;
+                  }
                 }
+                break;
               }
-              break;
             }
           }
           
