@@ -62,8 +62,14 @@ class TranscriptManager extends ChangeNotifier {
   String get currentCommand => _currentCommand;
 
   TranscriptManager() {
-    _loadSettings();
     _initializeTools();
+    // Settings will be loaded asynchronously before any connection is attempted
+  }
+
+  // Initialize with settings loaded
+  Future<void> initialize() async {
+    await _loadSettings();
+    return;
   }
 
   void _initializeTools() {
@@ -92,6 +98,13 @@ class TranscriptManager extends ChangeNotifier {
       _keywords = keywordsJson;
     }
     notifyListeners();
+    
+    // Reconnect if connection-related settings were changed and we're currently connected
+    if (needsReconnect && _status == ConnectionStatus.connected) {
+      disconnect();
+      await Future.delayed(const Duration(milliseconds: 500)); // Brief delay before reconnecting
+      connect();
+    }
   }
 
   Future<void> saveSettings({
@@ -104,15 +117,18 @@ class TranscriptManager extends ChangeNotifier {
     String? apiKey,
   }) async {
     final prefs = await SharedPreferences.getInstance();
+    bool needsReconnect = false;
 
-    if (serverUrl != null) {
+    if (serverUrl != null && serverUrl != _serverUrl) {
       _serverUrl = serverUrl;
       await prefs.setString('server_url', serverUrl);
+      needsReconnect = true;
     }
 
-    if (uid != null) {
+    if (uid != null && uid != _uid) {
       _uid = uid;
       await prefs.setString('uid', uid);
+      needsReconnect = true;
     }
 
     if (autoReconnect != null) {
@@ -151,13 +167,15 @@ class TranscriptManager extends ChangeNotifier {
   }
 
   Future<void> connect() async {
+    // Ensure settings are loaded before connecting
     if (_status == ConnectionStatus.connecting) return;
 
     _status = ConnectionStatus.connecting;
     _errorMessage = '';
     notifyListeners();
 
-    debugPrint(_uid);
+    // Make sure settings are loaded before connecting
+    debugPrint("Connecting with UID: $_uid");
 
     try {
       final url = '$_serverUrl?uid=$_uid';

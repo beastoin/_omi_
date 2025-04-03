@@ -24,16 +24,22 @@ void main() async {
     TrayService().showNotification('Omi Flow Started', 'Application is ready to use');
   });
   
-  runApp(const MyApp());
+  // Create and initialize the TranscriptManager before running the app
+  final transcriptManager = TranscriptManager();
+  await transcriptManager.initialize();
+  
+  runApp(MyApp(transcriptManager: transcriptManager));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  final TranscriptManager transcriptManager;
+  
+  const MyApp({Key? key, required this.transcriptManager}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => TranscriptManager(),
+    return ChangeNotifierProvider.value(
+      value: transcriptManager,
       child: MaterialApp(
         title: 'Omi Flow',
         theme: NintendoTheme.lightTheme,
