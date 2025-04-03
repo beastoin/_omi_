@@ -79,9 +79,12 @@ class TranscriptManager extends ChangeNotifier {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final oldServerUrl = _serverUrl;
+    final oldUid = _uid;
+    
     _serverUrl = prefs.getString('server_url') ?? _serverUrl;
     _uid = prefs.getString('uid') ?? _uid;
-        debugPrint("load settings ${_uid}");
+    debugPrint("load settings ${_uid}");
     _autoReconnect = prefs.getBool('auto_reconnect') ?? _autoReconnect;
     _autoPaste = prefs.getBool('auto_paste') ?? _autoPaste;
     _keywordDetection = prefs.getBool('keyword_detection') ?? _keywordDetection;
@@ -98,6 +101,9 @@ class TranscriptManager extends ChangeNotifier {
       _keywords = keywordsJson;
     }
     notifyListeners();
+    
+    // Check if connection-related settings were changed
+    bool needsReconnect = (oldServerUrl != _serverUrl || oldUid != _uid);
     
     // Reconnect if connection-related settings were changed and we're currently connected
     if (needsReconnect && _status == ConnectionStatus.connected) {
