@@ -22,6 +22,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _autoReconnect = true;
   bool _keywordDetection = true;
   String _selectedModel = 'gpt-3.5-turbo';
+  bool _isCustomModel = false;
+  late TextEditingController _customModelController;
   
   // Available LLM models
   final List<String> _availableModels = [
@@ -29,6 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'gpt-4',
     'gpt-4-turbo',
     'gpt-4o',
+    'Custom...',
   ];
 
   @override
@@ -38,8 +41,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _serverUrlController = TextEditingController(text: manager.serverUrl);
     _uidController = TextEditingController(text: manager.uid);
     _apiKeyController = TextEditingController();
+    _customModelController = TextEditingController();
     _keywordDetection = manager.keywordDetection;
-    _selectedModel = manager.llmModel;
+    
+    // Check if the current model is one of our predefined ones
+    final currentModel = manager.llmModel;
+    if (_availableModels.contains(currentModel)) {
+      _selectedModel = currentModel;
+      _isCustomModel = false;
+    } else {
+      _selectedModel = 'Custom...';
+      _customModelController.text = currentModel;
+      _isCustomModel = true;
+    }
     
     // If an initial section is specified, scroll to it
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -68,6 +82,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _serverUrlController.dispose();
     _uidController.dispose();
     _apiKeyController.dispose();
+    _customModelController.dispose();
     _apiKeyFocusNode.dispose();
     super.dispose();
   }
@@ -333,10 +348,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             if (newValue != null) {
                               setState(() {
                                 _selectedModel = newValue;
+                                _isCustomModel = newValue == 'Custom...';
                               });
                             }
                           },
                         ),
+                        if (_isCustomModel) ...[
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _customModelController,
+                            decoration: InputDecoration(
+                              labelText: 'Custom Model Name',
+                              hintText: 'Enter model identifier (e.g., gpt-4-32k)',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: NintendoTheme.luigiGreen,
+                                  width: 2,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: NintendoTheme.luigiGreen.withOpacity(0.5),
+                                  width: 2,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: NintendoTheme.luigiGreen,
+                                  width: 2,
+                                ),
+                              ),
+                              prefixIcon: Icon(
+                                Icons.edit,
+                                color: NintendoTheme.luigiGreen,
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         Text(
                           'Required for grammar correction tool. Your API key is stored locally and never shared.',
@@ -502,7 +553,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           autoReconnect: _autoReconnect,
                           keywordDetection: _keywordDetection,
                           apiKey: _apiKeyController.text,
-                          llmModel: _selectedModel,
+                          llmModel: _isCustomModel ? _customModelController.text : _selectedModel,
                         );
                         
                         if (context.mounted) {
