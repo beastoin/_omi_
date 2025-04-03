@@ -6,7 +6,9 @@ import 'keywords_screen.dart';
 import 'tools_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  final String? initialSection;
+  
+  const SettingsScreen({Key? key, this.initialSection}) : super(key: key);
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -16,6 +18,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _serverUrlController;
   late TextEditingController _uidController;
   late TextEditingController _apiKeyController;
+  final FocusNode _apiKeyFocusNode = FocusNode();
   bool _autoReconnect = true;
   bool _keywordDetection = true;
 
@@ -27,6 +30,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _uidController = TextEditingController(text: manager.uid);
     _apiKeyController = TextEditingController();
     _keywordDetection = manager.keywordDetection;
+    
+    // If an initial section is specified, scroll to it
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.initialSection == "api_key") {
+        // Focus on API key field
+        _apiKeyFocusNode.requestFocus();
+        
+        // Show a hint to the user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please enter your OpenAI API key to continue with your command'),
+            backgroundColor: NintendoTheme.neonRed,
+            duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -34,6 +58,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _serverUrlController.dispose();
     _uidController.dispose();
     _apiKeyController.dispose();
+    _apiKeyFocusNode.dispose();
     super.dispose();
   }
 
@@ -225,6 +250,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 16),
                         TextField(
                           controller: _apiKeyController,
+                          focusNode: _apiKeyFocusNode,
                           obscureText: true,
                           decoration: InputDecoration(
                             labelText: 'OpenAI API Key',

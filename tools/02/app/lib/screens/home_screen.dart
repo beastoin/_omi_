@@ -27,14 +27,33 @@ class _HomeScreenState extends State<HomeScreen> {
       final manager = Provider.of<TranscriptManager>(context, listen: false);
       manager.connect();
       
-      // Auto-paste is now handled directly in the TranscriptManager
-      // No need to add a listener here
+      // Listen for navigation requests to settings
+      manager.addListener(_checkForSettingsNavigation);
     });
+  }
+  
+  void _checkForSettingsNavigation() {
+    final manager = Provider.of<TranscriptManager>(context, listen: false);
+    if (manager.hasPendingSettingsNavigation) {
+      final section = manager.pendingSettingsSection;
+      // Navigate to settings page
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SettingsScreen(initialSection: section),
+        ),
+      ).then((_) {
+        // When returning from settings, check if there's a pending command
+        manager.executePendingCommandIfAvailable();
+      });
+    }
   }
   
   @override
   void dispose() {
-    // No listener to remove
+    // Remove the listener
+    final manager = Provider.of<TranscriptManager>(context, listen: false);
+    manager.removeListener(_checkForSettingsNavigation);
     super.dispose();
   }
   
@@ -179,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(),
+                  builder: (context) => const SettingsScreen(initialSection: null),
                 ),
               );
             },
