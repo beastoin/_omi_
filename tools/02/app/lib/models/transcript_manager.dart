@@ -244,6 +244,10 @@ class TranscriptManager extends ChangeNotifier {
     });
   }
 
+  // Keep track of recent segments to handle split keywords
+  final List<TranscriptSegment> _recentSegments = [];
+  final int _maxRecentSegments = 5; // Keep track of last 5 segments
+
   void _handleMessage(dynamic message) {
     try {
       final data = jsonDecode(message);
@@ -256,10 +260,22 @@ class TranscriptManager extends ChangeNotifier {
         notifyListeners();
       }
 
-      // First check for keywords, then auto-paste if appropriate
+      // Add new segments to recent segments list
+      _recentSegments.addAll(newSegments);
+      // Trim the list if it gets too long
+      if (_recentSegments.length > _maxRecentSegments) {
+        _recentSegments.removeRange(0, _recentSegments.length - _maxRecentSegments);
+      }
+
+      // First check for keywords in both new segments and recent context
       if (newSegments.isNotEmpty) {
+        // Check keywords in new segments first
         if (!_checkForKeyword(newSegments)) {
-          _autoPasteNewSegments(newSegments);
+          // If no keyword found, check with recent context for split keywords
+          if (!_isRecordingCommand && !_checkForKeyword(_recentSegments)) {
+            // If still no keyword found, auto-paste if appropriate
+            _autoPasteNewSegments(newSegments);
+          }
         }
       }
     } catch (e) {
@@ -310,8 +326,17 @@ class TranscriptManager extends ChangeNotifier {
   bool _checkForKeyword(List<TranscriptSegment> segments) {
     if (!_keywordDetection) return false;
 
+    // Normalize text by removing commas and extra spaces
+    String normalizeText(String text) {
+      return text.toLowerCase()
+          .replaceAll(',', ' ')  // Replace commas with spaces
+          .replaceAll('.', ' ')  // Replace periods with spaces
+          .replaceAll(RegExp(r'\s+'), ' ')  // Replace multiple spaces with single space
+          .trim();
+    }
+
     // Combine all new segment texts to check for the keywords
-    final String combinedText = segments.map((s) => s.text.toLowerCase()).join(' ');
+    final String combinedText = normalizeText(segments.map((s) => s.text).join(' '));
 
     // Check if we're already recording a command
     if (_isRecordingCommand) {
@@ -355,7 +380,11 @@ class TranscriptManager extends ChangeNotifier {
 
     // Check for any of the keywords in the list
     for (final keyword in _keywords) {
-      if (combinedText.toLowerCase().contains(keyword.toLowerCase())) {
+      // Normalize the keyword as well
+      String normalizedKeyword = normalizeText(keyword);
+      
+      // Check if the normalized keyword is in the normalized text
+      if (combinedText.contains(normalizedKeyword)) {
         // Start recording the command but exclude the trigger keyword
         _isRecordingCommand = true;
         _commandStartTime = DateTime.now();
@@ -363,7 +392,7 @@ class TranscriptManager extends ChangeNotifier {
         // Remove the trigger keyword from the initial command text
         String initialCommand = combinedText;
         // Find the end of the keyword in the text
-        int keywordEndIndex = initialCommand.toLowerCase().indexOf(keyword.toLowerCase()) + keyword.length;
+        int keywordEndIndex = initialCommand.indexOf(normalizedKeyword) + normalizedKeyword.length;
         // Only keep text after the keyword
         if (keywordEndIndex < initialCommand.length) {
           initialCommand = initialCommand.substring(keywordEndIndex).trim();
