@@ -14,6 +14,9 @@ class LlmService {
   })  : _apiKey = apiKey,
         _apiEndpoint = apiEndpoint,
         _model = model;
+        
+  // Get the current model
+  String get model => _model;
 
   /// Corrects grammar in the provided text
   Future<String> correctGrammar(String text) async {

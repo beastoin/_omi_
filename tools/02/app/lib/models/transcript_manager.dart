@@ -59,7 +59,9 @@ class TranscriptManager extends ChangeNotifier {
   // LLM service for grammar correction
   LlmService? _llmService;
   String _apiKey = '';
+  String _llmModel = 'gpt-3.5-turbo';
   bool get hasApiKey => _apiKey.isNotEmpty;
+  String get llmModel => _llmModel;
 
   List<TranscriptSegment> get segments => _segments;
   ConnectionStatus get status => _status;
@@ -101,10 +103,11 @@ class TranscriptManager extends ChangeNotifier {
     _autoPaste = prefs.getBool('auto_paste') ?? _autoPaste;
     _keywordDetection = prefs.getBool('keyword_detection') ?? _keywordDetection;
     _apiKey = prefs.getString('api_key') ?? '';
+    _llmModel = prefs.getString('llm_model') ?? _llmModel;
 
     // Initialize LLM service if API key is available
     if (_apiKey.isNotEmpty) {
-      _llmService = LlmService(apiKey: _apiKey);
+      _llmService = LlmService(apiKey: _apiKey, model: _llmModel);
     }
 
     // Load keywords from preferences
@@ -133,6 +136,7 @@ class TranscriptManager extends ChangeNotifier {
     bool? keywordDetection,
     List<String>? keywords,
     String? apiKey,
+    String? llmModel,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     bool needsReconnect = false;
@@ -173,9 +177,9 @@ class TranscriptManager extends ChangeNotifier {
       _apiKey = apiKey;
       await prefs.setString('api_key', apiKey);
 
-      // Initialize or update LLM service
+      // Initialize or update LLM service with current model
       if (apiKey.isNotEmpty) {
-        _llmService = LlmService(apiKey: apiKey);
+        _llmService = LlmService(apiKey: apiKey, model: _llmModel);
         
         // If there's a pending command that was waiting for API key, execute it
         if (_pendingCommand != null && 
@@ -188,6 +192,16 @@ class TranscriptManager extends ChangeNotifier {
         }
       } else {
         _llmService = null;
+      }
+    }
+    
+    if (llmModel != null) {
+      _llmModel = llmModel;
+      await prefs.setString('llm_model', llmModel);
+      
+      // Update LLM service with new model if it exists
+      if (_llmService != null) {
+        _llmService = LlmService(apiKey: _apiKey, model: llmModel);
       }
     }
 

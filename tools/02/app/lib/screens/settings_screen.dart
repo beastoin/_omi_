@@ -21,6 +21,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final FocusNode _apiKeyFocusNode = FocusNode();
   bool _autoReconnect = true;
   bool _keywordDetection = true;
+  String _selectedModel = 'gpt-3.5-turbo';
+  
+  // Available LLM models
+  final List<String> _availableModels = [
+    'gpt-3.5-turbo',
+    'gpt-4',
+    'gpt-4-turbo',
+    'gpt-4o',
+  ];
 
   @override
   void initState() {
@@ -30,6 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _uidController = TextEditingController(text: manager.uid);
     _apiKeyController = TextEditingController();
     _keywordDetection = manager.keywordDetection;
+    _selectedModel = manager.llmModel;
     
     // If an initial section is specified, scroll to it
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -282,6 +292,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: _selectedModel,
+                          decoration: InputDecoration(
+                            labelText: 'LLM Model',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.luigiGreen,
+                                width: 2,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.luigiGreen.withOpacity(0.5),
+                                width: 2,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: NintendoTheme.luigiGreen,
+                                width: 2,
+                              ),
+                            ),
+                            prefixIcon: Icon(
+                              Icons.model_training,
+                              color: NintendoTheme.luigiGreen,
+                            ),
+                          ),
+                          items: _availableModels.map((String model) {
+                            return DropdownMenuItem<String>(
+                              value: model,
+                              child: Text(model),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            if (newValue != null) {
+                              setState(() {
+                                _selectedModel = newValue;
+                              });
+                            }
+                          },
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Required for grammar correction tool. Your API key is stored locally and never shared.',
@@ -447,6 +502,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           autoReconnect: _autoReconnect,
                           keywordDetection: _keywordDetection,
                           apiKey: _apiKeyController.text,
+                          llmModel: _selectedModel,
                         );
                         
                         if (context.mounted) {
